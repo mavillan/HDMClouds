@@ -53,6 +53,16 @@ class HDSources():
                 minsig=None, maxsig=None, pix_freedom=1., mask=None, verbose=False):
 
         #######################################
+        # Evaluation regular-grid points
+        #######################################
+        _xe = np.linspace(0., 1., data.dims[0]+2)[1:-1]
+        _ye = np.linspace(0., 1., data.dims[1]+2)[1:-1]
+        Xe,Ye = np.meshgrid(_xe, _ye, sparse=False, indexing='ij')
+        xgrid = Xe.ravel(); ygrid = Ye.ravel()
+        self.xgrid = xgrid
+        self.ygrid = ygrid
+
+        #######################################
         # Computing points
         #######################################
         Nc = n_center
@@ -170,7 +180,6 @@ class HDSources():
         sig = sig_mapping(self.sig, self.minsig, self.maxsig)
         return xc, yc, c, sig
 
-
     def get_w(self):
         """
         Get the mapping from the 'c' coefficients in the linear
@@ -184,14 +193,8 @@ class HDSources():
 
 
     def get_residual_stats(self):
-        _xe = np.linspace(0., 1., self.dims[0]+2)[1:-1]
-        _ye = np.linspace(0., 1., self.dims[1]+2)[1:-1]
-        Xe,Ye = np.meshgrid(_xe, _ye, sparse=False, indexing='ij')
-        xe = Xe.ravel(); ye = Ye.ravel()
-
         xc, yc, c, sig = self.get_params_mapped()
-
-        u = u_eval(c, sig, xc, yc, xe, ye) + self.base_level
+        u = u_eval(c, sig, xc, yc, self.xgrid, self.ygrid) + self.base_level
         u = u.reshape(self.dims)
 
         if self.mask is not None:
@@ -204,43 +207,25 @@ class HDSources():
         flux_mask = residual<0.
         flux_addition = -1. * np.sum(residual[flux_mask])
         flux_lost = np.sum(residual[~flux_mask])
-        psi1_int = np.sum(psi1(-1*residual))
         npix = np.sum(flux_mask)
 
-
-        residual_stats = estimate_variance(residual), estimate_entropy(residual), \
-                         estimate_rms(residual), flux_addition/total_flux, \
-                         flux_lost/total_flux, psi1_int, npix, sharpness, psi2_int
+        residual_stats = estimate_variance(residual), estimate_rms(residual), \
+                         flux_addition/total_flux, flux_lost/total_flux, npix
         self.residual_stats = residual_stats
-
         return residual_stats
 
 
     def get_approximation(self):
-        _xe = np.linspace(0., 1., self.dims[0]+2)[1:-1]
-        _ye = np.linspace(0., 1., self.dims[1]+2)[1:-1]
-        Xe,Ye = np.meshgrid(_xe, _ye, sparse=False, indexing='ij')
-        xe = Xe.ravel(); ye = Ye.ravel()
-
         xc, yc, c, sig = self.get_params_mapped()
-
-        u = u_eval(c, sig, xc, yc, xe, ye) + self.base_level
+        u = u_eval(c, sig, xc, yc, self.xgrid, self.ygrid) + self.base_level
         u = u.reshape(self.dims)
-
         return u
 
 
     def get_gradient(self):
-        _xe = np.linspace(0., 1., self.dims[0]+2)[1:-1]
-        _ye = np.linspace(0., 1., self.dims[1]+2)[1:-1]
-        Xe,Ye = np.meshgrid(_xe, _ye, sparse=False, indexing='ij')
-        xe = Xe.ravel(); ye = Ye.ravel()
-
         xc, yc, c, sig = self.get_params_mapped()
-
-        grad = grad_eval(c, sig, xc, yc, xe, ye)
+        grad = grad_eval(c, sig, xc, yc, self.xgrid, self.ygrid)
         grad = grad.reshape(self.dims)
-
         return grad
 
 
@@ -256,15 +241,15 @@ class HDSources():
         self.sig = self.sig[mask]
 
     
-    def summarize(self, solver_output=True, residual_stats=True, coverage_stats=True, homogeneity_stats=True,
-                  solution_plot=True, params_plot=True, histograms_plot=True):
+    def summarize(self, solver_output=True, residual_stats=True, solution_plot=True,
+                  params_plot=True, histograms_plot=True):
         print('\n \n' + '#'*90)    
         print('FINAL RESULTS:')
         print('#'*90 + '\n')
         _xc, _yc, _c, _sig = self.get_params_mapped()
 
         out = self.get_residual_stats()
-        var,entr,rms,flux_addition,flux_lost,psi1_int,npix,sharpness,psi2_int = out
+        var,rms,flux_addition,flux_lost,npix = out
         
         if solver_output:
             print('Solver Output:')
@@ -277,43 +262,14 @@ class HDSources():
             print('\nResidual stats:')
             print('Residual RMS: {0}'.format(rms))
             print('Residual Variance: {0}'.format(var))
-            #print('Residual Entropy: {0}'.format(entr))
             print('Flux Lost: {0}'.format(flux_lost))
             print('Flux Addition: {0}'.format(flux_addition))
-            print('psi1(u-f): {0}'.format(psi1_int))
             print('Exceeded Pixels: {0}'.format(npix))
-            print('Sharpness: {0}'.format(sharpness))
-            print('psi2(grad u): {0}'.format(psi2_int))
-
             print('Total elapsed time: {0} [s]'.format(self.elapsed_time))
-
-        if coverage_stats:
-            center = np.ascontiguousarray( np.vstack( [self.xc, self.yc] ).T )
-            colloc = np.ascontiguousarray( np.vstack( [self.xe, self.ye] ).T )
-            print('\nCoverage of solution:')
-            print('Hausdorff distance between collocation and center points: {0}'.format(hausdorff(colloc, center)))
-            print('Mean min distance between collocation and center points: {0}'.format(mean_min_dist(colloc, center)))
-
-        if homogeneity_stats:
-            # we map each parameter vector to [0,1]
-            __xc = _xc - _xc.min(); __xc /= __xc.max()
-            __yc = _yc - _yc.min(); __yc /= __yc.max()
-            __c = _c - _c.min(); __c /= __c.max()
-            __sig = _sig - _sig.min(); __sig /= __sig.max()
-            params = np.vstack([__xc, __yc, __c, __sig]).T
-            params_dist_matrix = build_dist_matrix(params, inf=True)
-            max_mdist = np.max( params_dist_matrix.min(axis=1) )
-            mean_mdist = np.mean( params_dist_matrix.min(axis=1) )
-            print('\nHomogeneity of solution:')
-            print('Mean min distance in the (standarized) parameters space: {0}'.format(mean_mdist))
-            print('Max min distance in the (standarized) parameters space: {0}'.format(max_mdist))
-
         
         if solution_plot:
             gp.solution_plot(self.dfunc, _c, _sig, _xc, _yc, dims=self.dims, 
                              base_level=self.base_level)
-            #gp.image_plot(img_grad, title='Gradient')
-            #gp.image_plot(img_sign, title='Exceeded Pixels')
         
         if params_plot:
             gp.params_plot(_c, _sig, _xc, _yc)
@@ -391,6 +347,7 @@ class HDSources():
         self.elapsed_time = time.time() - t0
         #self.summarize()
 
+
     def build_htree(self):
         pass
-    
+
