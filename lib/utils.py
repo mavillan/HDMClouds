@@ -23,7 +23,7 @@ def u_eval(c, sig, xc, yc, xe, ye, support=5):
     return ret
 
 
-@numba.jit('float64[:] (float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64)', nopython=True)
+@numba.jit(nopython=True)
 def grad_eval(c, sig, xc, yc, xe, ye, support=5):
     m = len(xe)
     n = len(xc)
@@ -42,34 +42,6 @@ def grad_eval(c, sig, xc, yc, xe, ye, support=5):
             # uy evaluation
             ret[2,i] += coef * aux * (ye[i]-yc[j])
     return np.sqrt(ret[1,:]**2 + ret[2,:]**2)
-
-
-@numba.jit('float64[:,:] (float64[:], float64[:], float64[:], float64[:], float64[:], float64[:], float64)', nopython=True)
-def u_eval_full(c, sig, xc, yc, xe, ye, support=5):
-    m = len(xe)
-    n = len(xc)
-    ret = np.zeros((6,m))
-    for i in range(m):
-        for j in range(n):
-            dist2 = (xe[i]-xc[j])**2 + (ye[i]-yc[j])**2
-            if  dist2 > support**2 * sig[j]**2: continue
-            # common terms
-            coef = (-1./(sig[j]**2))
-            coef2 = coef**2
-            # u evaluation
-            aux = c[j] * exp( -dist2 / (2* sig[j]**2 ) )
-            ret[0,i] += aux
-            # ux evaluation
-            ret[1,i] += coef * aux * (xe[i]-xc[j])
-            # uy evaluation
-            ret[2,i] += coef * aux * (ye[i]-yc[j])
-            # uxy evaluation
-            ret[3,i] += coef2 * aux * (xe[i]-xc[j])*(ye[i]-yc[j])
-            # uxx evaluation
-            ret[4,i] += coef2 * aux * ((xe[i]-xc[j])**2 - sig[j]**2)
-            # uyy evaluation
-            ret[5,i] += coef2 * aux * ((ye[i]-yc[j])**2 - sig[j]**2)
-    return ret
 
 
 def estimate_rms(data):
@@ -169,7 +141,7 @@ def build_dist_matrix(points, inf=False):
 
 def load_data(fits_path):
     hdulist = fits.open(fits_path)
-    data = hdulist[0].data
+    data = hdulist[1].data
 
     if data.ndim>3:
         # droping out the stokes dimension
@@ -201,9 +173,6 @@ def load_data(fits_path):
         dfunc = RegularGridInterpolator((x, y, z), data, method='linear', bounds_error=False, fill_value=0.)
 
     return data,dfunc
-
-
-
 
 
 def sig_mapping(sig, minsig=0., maxsig=1.):
@@ -244,25 +213,6 @@ def gradient(img):
     gx, gy = np.gradient(img)
     img_grad = np.sqrt(gx**2 + gy**2)
     return img_grad
-
-
-def stat_extractor(r_stats, stat):
-    """
-    Function to extract a single residual stat from 
-    the r_stats structure (list of tuples)
-    """
-    if stat=='variance':
-        return np.array([var for (var,_,_,_,_,_,_,_,_) in r_stats])
-    elif stat=='entropy':
-        return np.array([entr for (_,entr,_,_,_,_,_,_,_) in r_stats])
-    elif stat=='rms':
-        return np.array([rms for (_,_,rms,_,_,_,_,_,_) in r_stats])
-    elif stat=='flux_addition':
-        return np.array([flux for (_,_,_,flux,_,_,_,_,_) in r_stats])
-    elif stat=='flux_lost':
-        return np.array([flux for (_,_,_,_,flux,_,_,_,_) in r_stats])
-    elif stat=='sharpness':
-        return np.array([sharp for (_,_,_,_,_,_,_,sharp,_) in r_stats])
 
 
 @numba.jit('int64[:,:] (int64[:,:], float64, int32, int32)')

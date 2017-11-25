@@ -11,9 +11,9 @@ from points_generation import _boundary_map
 
 font = {'fontname':'Times New Roman'}
 
-def image_plot(data, title=None):
+def image_plot(data, title=None, cmap=plt.cm.gray_r):
     plt.figure(figsize=(10,10))
-    im = plt.imshow(data, cmap=plt.cm.gray_r, interpolation=None)
+    im = plt.imshow(data, cmap=cmap, interpolation=None)
     if title is not None: plt.title(title)
     plt.grid()
     #plt.axis('off')
@@ -23,13 +23,13 @@ def image_plot(data, title=None):
     plt.show()
 
 
-def thresholded_image_plot(data, level):
+def thresholded_image_plot(data, level, cmap=plt.cm.gray_r):
     plt.figure(figsize=(10,10))
     ax = plt.gca()
     _data = np.zeros(data.shape)
     mask = data > level
     _data[mask] = data[mask]
-    im = ax.imshow(_data, cmap=plt.cm.gray_r)
+    im = ax.imshow(_data, cmap=cmap)
     plt.title('Thresholded data at: {0}'.format(level))
     #plt.axis('off')
     divider = make_axes_locatable(ax)
@@ -41,7 +41,7 @@ def thresholded_image_plot(data, level):
 
 
 def solution_plot(dfunc, c, sig, xc, yc, dims, base_level=0., mask=None, 
-                 resolution=1, title=None, support=5.):
+                 resolution=1, title=None, support=5., cmap=plt.cm.gray_r):
     _xe = np.linspace(0., 1., resolution*dims[0]+2)[1:-1]
     _ye = np.linspace(0., 1., resolution*dims[1]+2)[1:-1]
     len_xe = len(_xe); len_ye = len(_ye)
