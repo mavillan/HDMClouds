@@ -1,4 +1,5 @@
 import sys
+import warnings
 import numba
 import scipy
 import numpy as np
@@ -8,6 +9,9 @@ import numexpr as ne
 from math import sqrt, exp
 from scipy.interpolate import RegularGridInterpolator
 from astropy.io import fits
+from astropy.wcs import WCS
+from astropy.utils.exceptions import AstropyWarning
+warnings.simplefilter('ignore', category=AstropyWarning)
 
 
 @numba.jit(nopython=True)
@@ -140,39 +144,25 @@ def build_dist_matrix(points, inf=False):
 
 
 def load_data(fits_path):
-    hdulist = fits.open(fits_path)
-    data = hdulist[1].data
+    hdu = fits.open(fits_path)[0]
+    data = hdu.data
+    wcs = WCS(hdu.header)
 
     if data.ndim>3:
         # droping out the stokes dimension
         data = np.ascontiguousarray(data[0])
+        wcs = wcs.dropaxis(3)
 
         if data.shape[0]==1:
-            # in case data is an image and not a cube
+            # in case data is not a cube but an image
             data = np.ascontiguousarray(data[0])
+            wcs = wcs.dropaxis(2)
     
     # in case NaN values exist on data
     mask = np.isnan(data)
     if np.any(mask): data = ma.masked_array(data, mask=mask)
 
-    # map to 0-1 intensity range
-    data -= data.min()
-    data /= data.max()
-    
-    if data.ndim==2:
-        # generating the data function
-        x = np.linspace(0., 1., data.shape[0]+2, endpoint=True)[1:-1]
-        y = np.linspace(0., 1., data.shape[1]+2, endpoint=True)[1:-1]
-        dfunc = RegularGridInterpolator((x,y), data, method='linear', bounds_error=False, fill_value=0.)
-
-    elif data.ndim==3:
-        # generating the data function
-        x = np.linspace(0., 1., data.shape[0]+2, endpoint=True)[1:-1]
-        y = np.linspace(0., 1., data.shape[1]+2, endpoint=True)[1:-1]
-        z = np.linspace(0., 1., data.shape[2]+2, endpoint=True)[1:-1]
-        dfunc = RegularGridInterpolator((x, y, z), data, method='linear', bounds_error=False, fill_value=0.)
-
-    return data,dfunc
+    return data,wcs
 
 
 def sig_mapping(sig, minsig=0., maxsig=1.):
