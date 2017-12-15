@@ -10,7 +10,6 @@ import graph as gp
 from utils import *
 from points_generation import *
 from initial_guess import *
-from hausdorff import hausdorff
 
 
 #################################################################
@@ -49,8 +48,39 @@ def d1psi1(x, lamb=1.):
 # HDSources class definition
 #################################################################
 class HDSources():
-    def __init__(self, data, dfunc, alpha=0., lamb=1., n_center=200, base_level=0., 
-                minsig=None, maxsig=None, pix_freedom=1., mask=None, verbose=False):
+    def __init__(self, data, alpha=0., lamb=1., n_center=200, base_level=0., 
+        minsig=None, maxsig=None, pix_freedom=1., mask=None, verbose=False, wcs=None):
+
+        #######################################
+        # Scaling data to 0-1 range and
+        # building the interpolator
+        #######################################
+        vmin = data.min(); vmax = data.max()
+        data -= vmin
+        data /= vmax
+    
+        if data.ndim==2:
+            # generating the data function
+            x = np.linspace(0., 1., data.shape[0]+2, endpoint=True)[1:-1]
+            y = np.linspace(0., 1., data.shape[1]+2, endpoint=True)[1:-1]
+            dfunc = RegularGridInterpolator((x,y), data, method='linear', bounds_error=False, fill_value=0.)
+
+        elif data.ndim==3:
+            # generating the data function
+            x = np.linspace(0., 1., data.shape[0]+2, endpoint=True)[1:-1]
+            y = np.linspace(0., 1., data.shape[1]+2, endpoint=True)[1:-1]
+            z = np.linspace(0., 1., data.shape[2]+2, endpoint=True)[1:-1]
+            dfunc = RegularGridInterpolator((x, y, z), data, method='linear', bounds_error=False, fill_value=0.)
+
+        self.data = data
+        self.dims = data.shape
+        self.vmin = vmin
+        self.vmax = vmax
+        self.dfunc = dfunc
+        if mask is None:
+            self.mask = data > base_level #ESTO DEBERIA ELIMINARSE EVENTUALMENTE
+        else:
+            self.mask = mask
 
         #######################################
         # Evaluation regular-grid points
@@ -110,13 +140,6 @@ class HDSources():
         ########################################
         # HDSources internals
         ########################################
-        self.data = data
-        if mask is None:
-            self.mask = data > base_level
-        else:
-            self.mask = mask
-        self.dfunc = dfunc
-        self.dims = data.shape
         self.f0 = dfunc( np.vstack([xe,ye]).T )
         self.fb = dfunc( np.vstack([xb,yb]).T )
         self.xb = xb; self.yb = yb
