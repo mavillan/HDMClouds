@@ -6,7 +6,7 @@ from utils import u_eval
 from utils3D import u_eval as u_eval3D
 from utils3D import compute_solution
 from gmr import isd_diss_full
-from points_generation import _boundary_map
+from points_generation import boundary_map
 from astropy.visualization import AsymmetricPercentileInterval
 
 font = {'fontname':'Times New Roman'}
@@ -19,7 +19,7 @@ def image_plot(data, title=None, cmap=plt.cm.inferno, wcs=None,
     fig = plt.figure(figsize=(12,9))
     if wcs is not None: fig.gca(projection=wcs)
     if vmin is None or vmax is None:
-        interval = AsymmetricPercentileInterval(0.25, 99.75, n_samples=10000)
+        interval = AsymmetricPercentileInterval(0.25, 99.75, n_samples=100000)
         vmin, vmax = interval.get_limits(data)
         vmin = -0.1*(vmax-vmin) + vmin
         vmax = 0.1*(vmax-vmin) + vmax
@@ -50,8 +50,8 @@ def thresholded_image_plot(data, level, cmap=plt.cm.gray_r, wcs=None,
                wcs=wcs, vmin=vmin, vmax=vmax)
 
 
-def solution_plot(dfunc, c, sig, xc, yc, dims, base_level=0., mask=None, 
-                 resolution=1, title=None, support=5., cmap=plt.cm.gray_r):
+def solution_plot(dfunc, c, sig, xc, yc, dims, resolution=1, mask=None,
+                  title=None, support=5., cmap=plt.cm.gray_r):
     _xe = np.linspace(0., 1., resolution*dims[0]+2)[1:-1]
     _ye = np.linspace(0., 1., resolution*dims[1]+2)[1:-1]
     len_xe = len(_xe); len_ye = len(_ye)
@@ -60,7 +60,7 @@ def solution_plot(dfunc, c, sig, xc, yc, dims, base_level=0., mask=None,
     points = np.vstack([xe,ye]).T
 
     # approximation
-    u = u_eval(c, sig, xc, yc, xe, ye, support=support) + base_level
+    u = u_eval(c, sig, xc, yc, xe, ye, support=support)
     u = u.reshape(len_xe, len_ye)
 
     # real data
@@ -82,6 +82,7 @@ def solution_plot(dfunc, c, sig, xc, yc, dims, base_level=0., mask=None,
     im = ax.imshow(f, vmin=0., vmax=1., cmap=cmap)
     plt.title('Original')
     plt.axis('off')
+    ax.invert_yaxis()
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("right", size="5%", pad=0.05)
     plt.colorbar(im, cax=cax)
@@ -92,6 +93,7 @@ def solution_plot(dfunc, c, sig, xc, yc, dims, base_level=0., mask=None,
     im = ax.imshow(u, vmin=0., vmax=1., cmap=cmap)
     plt.title('Solution')
     plt.axis('off')
+    ax.invert_yaxis()
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("right", size="5%", pad=0.05)
     plt.colorbar(im, cax=cax)
@@ -102,6 +104,7 @@ def solution_plot(dfunc, c, sig, xc, yc, dims, base_level=0., mask=None,
     im = ax.imshow(res, vmin=0., vmax=1., cmap=cmap)
     plt.title('Residual')
     plt.axis('off')
+    ax.invert_yaxis()
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("right", size="5%", pad=0.05)
     plt.colorbar(im, cax=cax)
@@ -122,7 +125,6 @@ def params_plot(c, sig, xc, yc, remove_outlier=False):
     plt.xlim(-0.01,1.01)
     plt.ylim(-0.01,1.01)
     plt.scatter(yc, xc , c=c)
-    plt.gca().invert_yaxis()
     plt.colorbar()
     plt.subplot(1,2,2)
     if remove_outlier:
@@ -135,7 +137,6 @@ def params_plot(c, sig, xc, yc, remove_outlier=False):
     plt.xlim(-0.01,1.01)
     plt.ylim(-0.01,1.01)
     plt.scatter(yc, xc, c=sig**2)
-    plt.gca().invert_yaxis()
     plt.colorbar()
     plt.show()
  
@@ -179,7 +180,7 @@ def residual_plot(residual_variance, residual_entropy, residual_rms, iter_list):
 
 
     
-def points_plot(data, points=None, color=None, label=None, 
+def points_plot(data, points=None, color=None, wcs=None, label=None, 
                 title=None, cmap=plt.cm.gray_r, save_path=None):
     """
     Function to plot point in the data.
@@ -192,14 +193,19 @@ def points_plot(data, points=None, color=None, label=None,
     """
     x_scale = data.shape[0]-1
     y_scale = data.shape[1]-1
-    plt.figure(figsize=(10,10))
+    fig = plt.figure(figsize=(10,10))
+    if wcs is not None: fig.gca(projection=wcs)
     plt.imshow(data, cmap=cmap)
     plt.scatter(points[:,1]*y_scale, points[:,0]*x_scale, s=35, 
                 facecolor=color, lw=0, label=label)
     plt.legend(loc=4, prop={'size': 20})  
     plt.grid()
-    plt.tick_params(axis='both', which='major', labelsize=1)
-    if title is not None: plt.title(title) 
+    ax = plt.gca()
+    ax.invert_yaxis()
+    if title is not None: plt.title(title)
+    if wcs is not None:
+        plt.xlabel(umap[wcs.axis_type_names[0]])
+        plt.ylabel(umap[wcs.axis_type_names[1]])
     if save_path is not None:
         plt.savefig(save_path, format='eps', dpi=50, bbox_inches='tight')
     plt.show()
@@ -230,9 +236,9 @@ def components_plot(hds, components_list, n_levels=1, show_title=False,
     color = color[0:n_comp]
 
     if n_levels==1:
-        levels = [1.05*hds.base_level]
+        levels = [1.05*hds.back_level]
     else:
-        levels = np.linspace(1.05*hds.base_level, 0.95, n_levels)
+        levels = np.linspace(1.05*hds.back_level, 0.95, n_levels)
 
     if show_isd:
         # putting parameters in the correct format
@@ -246,7 +252,7 @@ def components_plot(hds, components_list, n_levels=1, show_title=False,
         _yc = yc[indexes]
         _c = c[indexes]
         _sig = sig[indexes]
-        u = u_eval(_c, _sig, _xc, _yc, xgrid, ygrid, support=hds.support) + hds.base_level
+        u = u_eval(_c, _sig, _xc, _yc, xgrid, ygrid, support=hds.support)
         _u = u.reshape(len_xe, len_ye)
 
         if show_isd:
@@ -263,7 +269,7 @@ def components_plot(hds, components_list, n_levels=1, show_title=False,
 
 
 def caa_show(data, caa, save_path=None,):
-    bd_map = _boundary_map(caa).T
+    bd_map = boundary_map(caa).T
     colors = plt.cm.rainbow(np.linspace(0., 1., bd_map.max()))
     
     cmap = plt.cm.gray_r
@@ -324,7 +330,7 @@ def solution_plot3D(hds):
 
     # approximated solution
     xc, yc, zc, c, sig = hds.get_params_mapped()
-    u = compute_solution(c, sig, xc, yc, zc, hds.dims, base_level=hds.base_level)
+    u = compute_solution(c, sig, xc, yc, zc, hds.dims, back_level=hds.back_level)
     _u = u.sum(axis=0)
     _u -= dmin; _u /= dmax
 
@@ -422,7 +428,7 @@ def components_plot3D(hds, components_list, n_levels=1, save_path=None):
         ax.grid()
 
         # contours configuration
-        minval = ((hds.base_level*hds.dims[axis]) - dmin) / dmax
+        minval = ((hds.back_level*hds.dims[axis]) - dmin) / dmax
         levels = np.linspace(minval+0.01, 0.95, n_levels)
 
         for i,indexes in enumerate(components_list):
@@ -431,7 +437,7 @@ def components_plot3D(hds, components_list, n_levels=1, save_path=None):
             _zc = zc[indexes]
             _c = c[indexes]
             _sig = sig[indexes]
-            u = u_eval3D(_c, _sig, _xc, _yc, _zc, xe, ye, ze, support=hds.support) + hds.base_level
+            u = u_eval3D(_c, _sig, _xc, _yc, _zc, xe, ye, ze, support=hds.support)
             _u = u.reshape(len_xe, len_ye, len_ze).sum(axis=axis)
             if axis==2: _u = _u.T
             _u -= dmin; _u /= dmax
@@ -448,9 +454,9 @@ def components_plot3D(hds, components_list, n_levels=1, save_path=None):
         _zc = zc[indexes]
         _c = c[indexes]
         _sig = sig[indexes]
-        u = u_eval3D(_c, _sig, _xc, _yc, _zc, xe, ye, ze, support=hds.support) + hds.base_level
+        u = u_eval3D(_c, _sig, _xc, _yc, _zc, xe, ye, ze, support=hds.support)
         u = u.reshape(len_xe, len_ye, len_ze)
-        #base = np.sum(u>0.)*hds.base_level
+        #base = np.sum(u>0.)*hds.back_level
         #_u -= dmin; _u /= dmax
         f = u.sum(axis=(1,2))
         f /= total_flux
@@ -479,7 +485,7 @@ def components_plot3D_(hds, components_dict, n_comp):
     clump_map = np.empty(hds.dims)
 
     # stacked data, mapping to [0,1] and display 
-    base_level = hds.base_level
+    back_level = hds.back_level
 
     # contours configuration
     color_index = 20.
@@ -490,9 +496,9 @@ def components_plot3D_(hds, components_dict, n_comp):
         _zc = zc[indexes]
         _c = c[indexes]
         _sig = sig[indexes]
-        u = u_eval3D(_c, _sig, _xc, _yc, _zc, xe, ye, ze, support=hds.support) + hds.base_level
+        u = u_eval3D(_c, _sig, _xc, _yc, _zc, xe, ye, ze, support=hds.support)
         _u = u.reshape(len_xe, len_ye, len_ze)
-        clump_map[_u > hds.base_level+0.01] = color_index
+        clump_map[_u > hds.back_level+0.01] = color_index
         color_index += 20.
     return clump_map
 

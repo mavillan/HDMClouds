@@ -6,10 +6,12 @@ import numpy as np
 import numexpr as ne
 from math import sqrt, exp
 import matplotlib.pyplot as plt
+
 import graph as gp
 from utils import *
 from points_generation import *
 from initial_guess import *
+from preprocessing import *
 
 
 #################################################################
@@ -48,16 +50,22 @@ def d1psi1(x, lamb=1.):
 # HDSources class definition
 #################################################################
 class HDSources():
-    def __init__(self, data, alpha=0., lamb=1., n_center=200, base_level=0., 
-        minsig=None, maxsig=None, pix_freedom=1., mask=None, verbose=False, wcs=None):
+    def __init__(self, data, alpha=0., lamb=1., n_center=200, back_level=None, 
+        minsig=None, maxsig=None, pix_freedom=1., verbose=False, wcs=None):
 
-        #######################################
-        # Scaling data to 0-1 range and
-        # building the interpolator
-        #######################################
-        vmin = data.min(); vmax = data.max()
+        #############################################################
+        # Preprocessing: Estimation of back_level, computing mask, 
+        # standardizing the data, building the linear interpolator
+        #############################################################
+        if back_level is None:
+            back_level = 0.25*estimate_rms(data)
+        mask = compute_mask(data, back_level)
+        data = np.copy(data)
+        data[mask] -= back_level
+        vmin = data[mask].min(); vmax = data[mask].max()
         data -= vmin
-        data /= vmax
+        data /= vmax-vmin
+        data[~mask] = 0
     
         if data.ndim==2:
             # generating the data function
@@ -73,20 +81,17 @@ class HDSources():
             dfunc = RegularGridInterpolator((x, y, z), data, method='linear', bounds_error=False, fill_value=0.)
 
         self.data = data
+        self.mask = mask
         self.dims = data.shape
         self.vmin = vmin
         self.vmax = vmax
         self.dfunc = dfunc
-        if mask is None:
-            self.mask = data > base_level #ESTO DEBERIA ELIMINARSE EVENTUALMENTE
-        else:
-            self.mask = mask
 
         #######################################
         # Evaluation regular-grid points
-        #######################################
-        _xe = np.linspace(0., 1., data.dims[0]+2)[1:-1]
-        _ye = np.linspace(0., 1., data.dims[1]+2)[1:-1]
+        ####################################### 
+        _xe = np.linspace(0., 1., data.shape[0]+2)[1:-1]
+        _ye = np.linspace(0., 1., data.shape[1]+2)[1:-1]
         Xe,Ye = np.meshgrid(_xe, _ye, sparse=False, indexing='ij')
         xgrid = Xe.ravel(); ygrid = Ye.ravel()
         self.xgrid = xgrid
@@ -99,10 +104,10 @@ class HDSources():
         Nb = int(0.2*Nc)
         Ne = 4*Nc-Nb
 
-        points = qrandom_centers_generation(dfunc, Ne, base_level, ndim=2)
+        points = qrandom_centers_generation(dfunc, Ne, ndim=2)
         center_points = points[0:Nc]
         collocation_points = points[0:Ne]
-        boundary_points = boundary_points_generation(data, base_level, Nb)
+        boundary_points = boundary_points_generation(data, mask, Nb)
 
         # right format
         xc = center_points[:,0]
@@ -114,10 +119,9 @@ class HDSources():
 
         if verbose:
             # visualizing the choosen points
-            points_plot(data, points=center_points, label="Center points", color="red")
-            points_plot(data, points=collocation_points, label="Collocation points", color="blue")
-            points_plot(data, points=boundary_points, label="Boundary points", color="green")
-
+            gp.points_plot(data, points=center_points, label="Center points", color="red", wcs=wcs)
+            gp.points_plot(data, points=collocation_points, label="Collocation points", color="blue", wcs=wcs)
+            gp.points_plot(data, points=boundary_points, label="Boundary points", color="green", wcs=wcs)
 
         #######################################
         # Estimating initial guess
@@ -132,10 +136,9 @@ class HDSources():
 
         if verbose:
             # visualizing the initial guess
-            solution_plot(dfunc, c0, sig0, xc, yc, dims=data.shape, base_level=base_level)
-            params_plot(c0, sig0, xc, yc)
-            params_distribution_plot(c0, sig0)
-
+            gp.solution_plot(dfunc, c0, sig0, xc, yc, dims=data.shape)
+            gp.params_plot(c0, sig0, xc, yc)
+            gp.params_distribution_plot(c0, sig0)
 
         ########################################
         # HDSources internals
@@ -157,7 +160,7 @@ class HDSources():
         self.d1psi1 = d1psi1
         self.alpha = alpha
         self.lamb = lamb
-        self.base_level = base_level
+        self.back_level = back_level
         self.scipy_sol = None
         self.elapsed_time = None
         self.residual_stats = None
@@ -217,7 +220,7 @@ class HDSources():
 
     def get_residual_stats(self):
         xc, yc, c, sig = self.get_params_mapped()
-        u = u_eval(c, sig, xc, yc, self.xgrid, self.ygrid) + self.base_level
+        u = u_eval(c, sig, xc, yc, self.xgrid, self.ygrid)
         u = u.reshape(self.dims)
 
         if self.mask is not None:
@@ -240,7 +243,7 @@ class HDSources():
 
     def get_approximation(self):
         xc, yc, c, sig = self.get_params_mapped()
-        u = u_eval(c, sig, xc, yc, self.xgrid, self.ygrid) + self.base_level
+        u = u_eval(c, sig, xc, yc, self.xgrid, self.ygrid)
         u = u.reshape(self.dims)
         return u
 
@@ -291,8 +294,7 @@ class HDSources():
             print('Total elapsed time: {0} [s]'.format(self.elapsed_time))
         
         if solution_plot:
-            gp.solution_plot(self.dfunc, _c, _sig, _xc, _yc, dims=self.dims, 
-                             base_level=self.base_level)
+            gp.solution_plot(self.dfunc, _c, _sig, _xc, _yc, dims=self.dims)
         
         if params_plot:
             gp.params_plot(_c, _sig, _xc, _yc)
@@ -323,7 +325,7 @@ class HDSources():
         xb = self.xb; yb = self.yb
         
         # computing the EL equation
-        u = u_eval(c, sig, xc, yc, xe, ye) + self.base_level
+        u = u_eval(c, sig, xc, yc, xe, ye)
         f0 = np.hstack([ self.f0, self.dfunc(np.vstack([xc,yc]).T) ])
         alpha = self.alpha; lamb = self.lamb
 
@@ -333,7 +335,7 @@ class HDSources():
             
         # evaluating at boundary
         fb = self.fb
-        u_boundary = u_eval(c, sig, xc, yc, self.xb, self.yb) + self.base_level
+        u_boundary = u_eval(c, sig, xc, yc, self.xb, self.yb)
         
         return np.concatenate([el,u_boundary-fb])
 
