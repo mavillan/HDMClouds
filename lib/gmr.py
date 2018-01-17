@@ -46,7 +46,7 @@ def ncomp_finder(kl_hist, w_size=10):
     """
     Heuristic: If the actual diff is 1 order of magnitude
     greater than the mean of the 10 last diff values, we 
-    consider this points as the number of components estimate
+    consider this points as the estimate of the number of components
     """
     diff = np.diff(kl_hist)
     diff -= diff.min()
@@ -200,7 +200,6 @@ def kl_diss(c1, mu1, sig1, c2, mu2, sig2):
 #################################################################
 # MAIN GAUSSIAN REDUCTION FUNCTION
 #################################################################
-
 def gaussian_reduction(c, mu, sig, n_comp, metric='KL', verbose=True):
     if metric=='KL': 
         _metric = kl_diss
@@ -221,7 +220,7 @@ def gaussian_reduction(c, mu, sig, n_comp, metric='KL', verbose=True):
 
     # indexes of the actual gaussian components
     components = [i for i in range(len(c))]
-    components_dict = {i:[i] for i in range(len(c))}
+    structs_dict = {i:[i] for i in range(len(c))}
     htree = {}
     new_comp = len(c)
 
@@ -256,9 +255,9 @@ def gaussian_reduction(c, mu, sig, n_comp, metric='KL', verbose=True):
         components.append(new_comp)
         c.append(c_m); mu.append(mu_m); sig.append(sig_m)
         htree[new_comp] = (min(ii_min,jj_min), max(ii_min,jj_min))
-        tmp = components_dict[min(ii_min,jj_min)] + components_dict[max(ii_min,jj_min)]
+        tmp = structs_dict[min(ii_min,jj_min)] + structs_dict[max(ii_min,jj_min)]
         tmp.sort()
-        components_dict[new_comp] = tmp
+        structs_dict[new_comp] = tmp
         new_comp += 1
     
-    return components_dict,htree
+    return structs_dict,htree

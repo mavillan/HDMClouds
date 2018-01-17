@@ -211,34 +211,39 @@ def points_plot(data, points=None, color=None, wcs=None, label=None,
     plt.show()
 
     
-def components_plot(hds, components_list, n_levels=1, show_title=False,
-                    cmap=plt.cm.gray_r, show_isd=False, save_path=None):
+def structs_plot(hds, structs_list, show_title=False,
+                    cmap=plt.cm.gray_r, show_isd=False, save_path=None, wcs=None):
     # get all the (mapped) parameters
     xc, yc, c, sig = hds.get_params_mapped()
     
     # evaluation points
-    xgrid = self.xgrid
-    ygrid = self.ygrid
+    xgrid = hds.xgrid
+    ygrid = hds.ygrid
     
-    plt.figure(figsize=(8,8))
-    plt.tick_params(axis='both', which='major', labelsize=1)
-    plt.grid()
-    n_comp = len(components_list)
-    if show_title: plt.title('{0} components solution'.format(n_comp))
+    fig = plt.figure(figsize=(12,9))
+    if wcs is not None: fig.gca(projection=wcs)
+    interval = AsymmetricPercentileInterval(0.25, 99.75, n_samples=100000)
+    vmin, vmax = interval.get_limits(hds.orig_data)
+    vmin = -0.1*(vmax-vmin) + vmin
+    vmax = 0.1*(vmax-vmin) + vmax
 
-    ax = plt.subplot(1,1,1)
-    ax.imshow(hds.data, cmap=cmap)
+    #plt.tick_params(axis='both', which='major', labelsize=1)
+    plt.grid()
+    n_comp = len(structs_list)
+    if show_title: plt.title('{0} structs solution'.format(n_comp))
+
+    ax = plt.gca()
+    im = ax.imshow(hds.orig_data, cmap=cmap)
+    ax.invert_yaxis()
+    plt.xlabel(umap[wcs.axis_type_names[0]])
+    plt.ylabel(umap[wcs.axis_type_names[1]])
 
     # generating the color of sources
     maxclump = 20
     color = plt.cm.rainbow(np.linspace(0., 1., maxclump))
     np.random.seed(1); np.random.shuffle(color)
     color = color[0:n_comp]
-
-    if n_levels==1:
-        levels = [1.05*hds.back_level]
-    else:
-        levels = np.linspace(1.05*hds.back_level, 0.95, n_levels)
+    levels = [0.02] # HARDCODED VALUE
 
     if show_isd:
         # putting parameters in the correct format
@@ -247,13 +252,13 @@ def components_plot(hds, components_list, n_levels=1, show_title=False,
         Sig = np.zeros((len(w),2,2))
         Sig[:,0,0] = sig; Sig[:,1,1] = sig
 
-    for i,indexes in enumerate(components_list):
+    for i,indexes in enumerate(structs_list):
         _xc = xc[indexes]
         _yc = yc[indexes]
         _c = c[indexes]
         _sig = sig[indexes]
-        u = u_eval(_c, _sig, _xc, _yc, xgrid, ygrid, support=hds.support)
-        _u = u.reshape(len_xe, len_ye)
+        u = u_eval(_c, _sig, _xc, _yc, xgrid, ygrid)
+        _u = u.reshape(hds.dims)
 
         if show_isd:
             _isd = isd_diss_full(w[indexes], mu[indexes], Sig[indexes])
@@ -264,6 +269,8 @@ def components_plot(hds, components_list, n_levels=1, show_title=False,
     if show_isd: plt.legend(bbox_to_anchor=(1.05, 1), loc=2)
     if save_path is not None:
         plt.savefig(save_path, format='eps', dpi=150, bbox_inches='tight')
+    plt.colorbar(im, ax=ax, pad=0.01, aspect=30)
+    ax.set_aspect('auto')
     plt.show()
 
 
@@ -389,7 +396,7 @@ def comparative_slices_plot(data1, data2, slc):
     plt.show()
 
 
-def components_plot3D(hds, components_list, n_levels=1, save_path=None):
+def structs_plot3D(hds, structs_list, n_levels=1, save_path=None):
     # get all the (mapped) parameters
     xc, yc, zc, c, sig = hds.get_params_mapped()
 
@@ -401,7 +408,7 @@ def components_plot3D(hds, components_list, n_levels=1, save_path=None):
     Xe,Ye,Ze = np.meshgrid(_xe, _ye, _ze, sparse=False, indexing='ij')
     xe = Xe.ravel(); ye = Ye.ravel(); ze = Ze.ravel()
 
-    n_comp = len(components_list)
+    n_comp = len(structs_list)
     color = plt.cm.rainbow(np.linspace(0., 1., n_comp))
 
     for axis in range(3):
@@ -431,7 +438,7 @@ def components_plot3D(hds, components_list, n_levels=1, save_path=None):
         minval = ((hds.back_level*hds.dims[axis]) - dmin) / dmax
         levels = np.linspace(minval+0.01, 0.95, n_levels)
 
-        for i,indexes in enumerate(components_list):
+        for i,indexes in enumerate(structs_list):
             _xc = xc[indexes]
             _yc = yc[indexes]
             _zc = zc[indexes]
@@ -448,7 +455,7 @@ def components_plot3D(hds, components_list, n_levels=1, save_path=None):
 
     total_flux = hds.data.sum()
     plt.figure(figsize=(8,8))
-    for i,indexes in enumerate(components_list):
+    for i,indexes in enumerate(structs_list):
         _xc = xc[indexes]
         _yc = yc[indexes]
         _zc = zc[indexes]
@@ -470,7 +477,7 @@ def components_plot3D(hds, components_list, n_levels=1, save_path=None):
     plt.show()
 
 
-def components_plot3D_(hds, components_dict, n_comp):
+def structs_plot3D_(hds, structs_dict, n_comp):
     # get all the (mapped) parameters
     xc, yc, zc, c, sig = hds.get_params_mapped()
 
@@ -490,7 +497,7 @@ def components_plot3D_(hds, components_dict, n_comp):
     # contours configuration
     color_index = 20.
 
-    for i,indexes in enumerate(components_dict[n_comp]):
+    for i,indexes in enumerate(structs_dict[n_comp]):
         _xc = xc[indexes]
         _yc = yc[indexes]
         _zc = zc[indexes]

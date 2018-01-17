@@ -57,6 +57,7 @@ class HDSources():
         # Preprocessing: Estimation of back_level, computing mask, 
         # standardizing the data, building the linear interpolator
         #############################################################
+        self.orig_data = data
         if back_level is None:
             back_level = 0.25*estimate_rms(data)
         mask = compute_mask(data, back_level)
