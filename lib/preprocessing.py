@@ -20,13 +20,13 @@ def compute_mask(data, back_level, min_obj_size=20, min_hole_size=10):
     square2 = square(2)
     # cleaning
     mask = binary_opening(mask, selem=disk1)
-    mask = remove_small_objects(mask, min_size=min_obj_size)
+    mask = remove_small_objects(mask.astype(bool), min_size=min_obj_size)
     mask = binary_closing(mask, selem=square2)
     mask = remove_small_holes(mask, min_size=min_hole_size)
     return mask
 
 
-def mask_show_helper(data, back_level, wcs):
+def mask_show_helper(data, back_level, wcs=None):
     mask = compute_mask(data, back_level)
 
     # visualization of original image
@@ -37,22 +37,23 @@ def mask_show_helper(data, back_level, wcs):
     vmin, vmax = interval.get_limits(data)
     vmin = -0.1*(vmax-vmin) + vmin
     vmax = 0.1*(vmax-vmin) + vmax
-    im = plt.imshow(data, cmap=plt.cm.inferno, interpolation=None, vmin=vmin, vmax=vmax)
+    im = plt.imshow(data, cmap=plt.cm.cubehelix, interpolation=None, vmin=vmin, vmax=vmax)
     plt.grid()
     ax1.invert_yaxis()
-    plt.xlabel(umap[wcs.axis_type_names[0]])
-    plt.ylabel(umap[wcs.axis_type_names[1]])
+    if wcs is not None:
+        plt.xlabel(umap[wcs.axis_type_names[0]])
+        plt.ylabel(umap[wcs.axis_type_names[1]])
     plt.colorbar(im, ax=ax1, pad=0.01, aspect=30)
     ax1.set_aspect('auto')
 
     # visualization of mask of significant emission pixels
     ax2 = plt.subplot(132, projection=wcs)
     plt.title("Mask")
-    im = plt.imshow(mask, cmap=plt.cm.gray, vmin=0, vmax=1)
+    im = plt.imshow(mask, cmap=plt.cm.cubehelix, vmin=0, vmax=1)
     plt.grid()
     ax2.invert_yaxis()
-    plt.xlabel(umap[wcs.axis_type_names[0]])
-    plt.ylabel(umap[wcs.axis_type_names[1]])
+    if wcs is not None:
+        plt.xlabel(umap[wcs.axis_type_names[0]])
     plt.colorbar(im, ax=ax2, pad=0.01, aspect=30)
     ax2.set_aspect('auto')
 
@@ -61,11 +62,11 @@ def mask_show_helper(data, back_level, wcs):
     _data[~mask] = 0
     ax3 = plt.subplot(133, projection=wcs)
     plt.title("Masked Image")
-    im = plt.imshow(_data, cmap=plt.cm.inferno, interpolation=None, vmin=vmin, vmax=vmax)
+    im = plt.imshow(_data, cmap=plt.cm.cubehelix, interpolation=None, vmin=vmin, vmax=vmax)
     plt.grid()
     ax3.invert_yaxis()
-    plt.xlabel(umap[wcs.axis_type_names[0]])
-    plt.ylabel(umap[wcs.axis_type_names[1]])
+    if wcs is not None:
+        plt.xlabel(umap[wcs.axis_type_names[0]])
     plt.colorbar(im, ax=ax3, pad=0.01, aspect=30)
     ax3.set_aspect('auto')
     plt.show()
@@ -83,7 +84,6 @@ def preprocessing(data, wcs=None):
     # interactive selection of back_level and mask
     interact(mask_show_helper, 
              data=fixed(data), 
-             back_level=FloatSlider(min=minv,max=maxv,step=step,value=back_level), 
-             wcs=fixed(wcs));
-
+             back_level=FloatSlider(min=minv,max=maxv,step=step,value=back_level,readout_format='.4f'), 
+                                    wcs=fixed(wcs));
 
