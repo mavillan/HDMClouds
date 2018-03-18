@@ -162,7 +162,7 @@ def load_data(fits_path):
     mask = np.isnan(data)
     if np.any(mask): data = ma.masked_array(data, mask=mask)
 
-    return data,wcs
+    return data,wcs,hdu
 
 
 def sig_mapping(sig, minsig=0., maxsig=1.):
