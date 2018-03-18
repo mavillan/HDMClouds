@@ -6,7 +6,7 @@ from utils import u_eval
 from utils3D import u_eval as u_eval3D
 from utils3D import compute_solution
 from gmr import isd_diss_full
-from points_generation import boundary_map
+from points_generation import boundary_map_caa
 from astropy.visualization import AsymmetricPercentileInterval
 
 font = {'fontname':'Times New Roman'}
@@ -14,8 +14,8 @@ umap = {'RA':'RA (J2000)', 'DEC':'Dec (J2000)',
         'GLON':'Galactic Longitude', 'GLAT':'Galactic Latitude'}
 
 
-def image_plot(data, title=None, cmap=plt.cm.inferno, wcs=None,
-               vmin=None, vmax=None):
+def image_plot(data, title=None, cmap=plt.cm.cubehelix, wcs=None,
+               vmin=None, vmax=None, unit=None):
     fig = plt.figure(figsize=(12,9))
     if wcs is not None: fig.gca(projection=wcs)
     if vmin is None or vmax is None:
@@ -31,12 +31,13 @@ def image_plot(data, title=None, cmap=plt.cm.inferno, wcs=None,
     if wcs is not None:
         plt.xlabel(umap[wcs.axis_type_names[0]])
         plt.ylabel(umap[wcs.axis_type_names[1]])
-    plt.colorbar(im, ax=ax, pad=0.01, aspect=30)
+    cbar = plt.colorbar(im, ax=ax, pad=0.01, aspect=30)
+    if unit is not None: cbar.set_label("[{0}]".format(unit))
     ax.set_aspect('auto')
     plt.show()
 
 
-def thresholded_image_plot(data, level, cmap=plt.cm.gray_r, wcs=None,
+def thresholded_image_plot(data, level, cmap=plt.cm.cubehelix, wcs=None,
                            vmin=None, vmax=None):
     if vmin is None or vmax is None:
         interval = AsymmetricPercentileInterval(0.25, 99.75, n_samples=10000)
@@ -51,7 +52,7 @@ def thresholded_image_plot(data, level, cmap=plt.cm.gray_r, wcs=None,
 
 
 def solution_plot(dfunc, c, sig, xc, yc, dims, resolution=1, mask=None,
-                  title=None, support=5., cmap=plt.cm.gray_r):
+                  title=None, support=5., cmap=plt.cm.cubehelix):
     _xe = np.linspace(0., 1., resolution*dims[0]+2)[1:-1]
     _ye = np.linspace(0., 1., resolution*dims[1]+2)[1:-1]
     len_xe = len(_xe); len_ye = len(_ye)
@@ -79,7 +80,7 @@ def solution_plot(dfunc, c, sig, xc, yc, dims, resolution=1, mask=None,
     plt.figure(figsize=(18,12))
     plt.subplot(1,3,1)
     ax = plt.gca()
-    im = ax.imshow(f, vmin=0., vmax=1., cmap=cmap)
+    im = ax.imshow(f, vmin=0., vmax=1., cmap=plt.cm.cubehelix)
     plt.title('Original')
     plt.axis('off')
     ax.invert_yaxis()
@@ -90,7 +91,7 @@ def solution_plot(dfunc, c, sig, xc, yc, dims, resolution=1, mask=None,
     # approximated solution plot
     plt.subplot(1,3,2)
     ax = plt.gca()
-    im = ax.imshow(u, vmin=0., vmax=1., cmap=cmap)
+    im = ax.imshow(u, vmin=0., vmax=1., cmap=plt.cm.cubehelix)
     plt.title('Solution')
     plt.axis('off')
     ax.invert_yaxis()
@@ -101,7 +102,7 @@ def solution_plot(dfunc, c, sig, xc, yc, dims, resolution=1, mask=None,
     # residual plot
     plt.subplot(1,3,3)
     ax = plt.gca()
-    im = ax.imshow(res, vmin=0., vmax=1., cmap=cmap)
+    im = ax.imshow(res, vmin=0., vmax=1., cmap=plt.cm.cubehelix)
     plt.title('Residual')
     plt.axis('off')
     ax.invert_yaxis()
@@ -181,7 +182,7 @@ def residual_plot(residual_variance, residual_entropy, residual_rms, iter_list):
 
     
 def points_plot(data, points=None, color=None, wcs=None, label=None, 
-                title=None, cmap=plt.cm.gray_r, save_path=None):
+                title=None, cmap=plt.cm.cubehelix, save_path=None):
     """
     Function to plot point in the data.
 
@@ -211,43 +212,49 @@ def points_plot(data, points=None, color=None, wcs=None, label=None,
     plt.show()
 
     
-def structs_plot(hds, structs_list, show_title=False,
-                    cmap=plt.cm.gray_r, show_isd=False, save_path=None, wcs=None):
+def structs_plot(hdmc, structs_list, show_title=False, cmap1=plt.cm.cubehelix, 
+                 cmap2=plt.cm.gist_rainbow, show_isd=False, save_path=None, 
+                 wcs=None, unit=None, manual_label=False):
     # get all the (mapped) parameters
-    xc, yc, c, sig = hds.get_params_mapped()
+    xc, yc, c, sig = hdmc.get_params_mapped()
     
     # evaluation points
-    xgrid = hds.xgrid
-    ygrid = hds.ygrid
+    xgrid = hdmc.xgrid
+    ygrid = hdmc.ygrid
     
     fig = plt.figure(figsize=(12,9))
     if wcs is not None: fig.gca(projection=wcs)
     interval = AsymmetricPercentileInterval(0.25, 99.75, n_samples=100000)
-    vmin, vmax = interval.get_limits(hds.orig_data)
+    vmin, vmax = interval.get_limits(hdmc.orig_data)
     vmin = -0.1*(vmax-vmin) + vmin
     vmax = 0.1*(vmax-vmin) + vmax
 
     #plt.tick_params(axis='both', which='major', labelsize=1)
     plt.grid()
     n_comp = len(structs_list)
-    if show_title: plt.title('{0} structs solution'.format(n_comp))
+    if show_title: plt.title('{0} structs representation'.format(n_comp))
 
     ax = plt.gca()
-    im = ax.imshow(hds.orig_data, cmap=cmap)
+    im = ax.imshow(hdmc.orig_data, cmap=cmap1, vmin=vmin, vmax=vmax)
     ax.invert_yaxis()
-    plt.xlabel(umap[wcs.axis_type_names[0]])
-    plt.ylabel(umap[wcs.axis_type_names[1]])
+    if wcs is not None:
+        plt.xlabel(umap[wcs.axis_type_names[0]])
+        plt.ylabel(umap[wcs.axis_type_names[1]])
+    else:
+        plt.tick_params(labelbottom=False, labelleft=False) 
 
     # generating the color of sources
-    maxclump = 20
-    color = plt.cm.rainbow(np.linspace(0., 1., maxclump))
-    np.random.seed(1); np.random.shuffle(color)
+    maxclump = 10 # ARREGLAR ESTO!
+    #color = plt.cm.rainbow(np.linspace(0., 1., maxclump))
+    color = cmap2(np.linspace(0., 1., maxclump))
+    np.random.seed(23); 
+    np.random.shuffle(color)
     color = color[0:n_comp]
-    levels = [0.02] # HARDCODED VALUE
+    levels = [0.025] # HARDCODED VALUE
 
     if show_isd:
         # putting parameters in the correct format
-        w = hds.get_w()
+        w = hdmc.get_w()
         mu = np.vstack([xc,yc]).T
         Sig = np.zeros((len(w),2,2))
         Sig[:,0,0] = sig; Sig[:,1,1] = sig
@@ -258,26 +265,30 @@ def structs_plot(hds, structs_list, show_title=False,
         _c = c[indexes]
         _sig = sig[indexes]
         u = u_eval(_c, _sig, _xc, _yc, xgrid, ygrid)
-        _u = u.reshape(hds.dims)
+        _u = u.reshape(hdmc.dims)
 
         if show_isd:
             _isd = isd_diss_full(w[indexes], mu[indexes], Sig[indexes])
             cs = ax.contour(_u, levels=levels, colors=[color[i]], linewidths=4)
             cs.collections[0].set_label('ISD: {0}'.format(_isd))
         else:
-            ax.contour(_u, levels=levels, colors=[color[i]], linewidths=4)
+            cs = ax.contour(_u, levels=levels, colors=[color[i]], linewidths=4)
+            ax.clabel(cs, cs.levels, inline=True, fmt="S{0}".format(i+1), 
+                      fontsize=13, manual=manual_label)
     if show_isd: plt.legend(bbox_to_anchor=(1.05, 1), loc=2)
     if save_path is not None:
         plt.savefig(save_path, format='eps', dpi=150, bbox_inches='tight')
-    plt.colorbar(im, ax=ax, pad=0.01, aspect=30)
+    
+    cbar = plt.colorbar(im, ax=ax, pad=0.01, aspect=30)
+    if unit is not None: cbar.set_label("[{0}]".format(unit))
     ax.set_aspect('auto')
     plt.show()
 
 
 
 def caa_show(data, caa, save_path=None,):
-    bd_map = boundary_map(caa).T
-    colors = plt.cm.rainbow(np.linspace(0., 1., bd_map.max()))
+    bd_map = boundary_map_caa(caa).T
+    colors = plt.cm.rainbow(np.linspace(0., 1., caa.max()))
     
     cmap = plt.cm.gray_r
     norm = plt.Normalize(data.min(), data.max())
@@ -289,12 +300,16 @@ def caa_show(data, caa, save_path=None,):
             if bd_map[i,j]==0: continue
             rgba[i,j,:] = colors[bd_map[i,j]-1]
 
-    plt.figure(figsize=(8,8))
-    plt.tick_params(axis='both', which='major', labelsize=0)
+    fig = plt.figure(figsize=(8,8))
+    im = plt.imshow(rgba)
     plt.grid()
-    plt.imshow(rgba)
+    plt.tick_params(labelbottom=False, labelleft=False)
+    ax = plt.gca()
+    ax.invert_yaxis()
     if save_path is not None:
         plt.savefig(save_path, format='eps', dpi=150, bbox_inches='tight')
+    #cbar = plt.colorbar(im, ax=ax, pad=0.01, aspect=30)
+    ax.set_aspect('auto')
     plt.show()
     
 
@@ -320,7 +335,7 @@ def points_plot3D(points, title=None):
 
 def slices_plot(data, slc):
     plt.figure(figsize=(8,8))
-    im = plt.imshow(data[slc], vmin=0, vmax=1., cmap=plt.cm.gray_r)
+    im = plt.imshow(data[slc], vmin=0, vmax=1., cmap=plt.cm.cubehelix)
     plt.title('3D cube at slice: {0}'.format(slc))
     plt.axis('off')
     divider = make_axes_locatable(plt.gca())
@@ -329,15 +344,15 @@ def slices_plot(data, slc):
     plt.show()
   
 
-def solution_plot3D(hds):
+def solution_plot3D(hdmc):
     # original (stacked) data
-    _data = hds.data.sum(axis=0)
+    _data = hdmc.data.sum(axis=0)
     dmin = _data.min(); dmax = _data.max()
     _data -= dmin; _data /= dmax
 
     # approximated solution
-    xc, yc, zc, c, sig = hds.get_params_mapped()
-    u = compute_solution(c, sig, xc, yc, zc, hds.dims, back_level=hds.back_level)
+    xc, yc, zc, c, sig = hdmc.get_params_mapped()
+    u = compute_solution(c, sig, xc, yc, zc, hdmc.dims, back_level=hdmc.back_level)
     _u = u.sum(axis=0)
     _u -= dmin; _u /= dmax
 
@@ -348,7 +363,7 @@ def solution_plot3D(hds):
     plt.figure(figsize=(18,12))
     plt.subplot(1,3,1)
     ax = plt.gca()
-    im = ax.imshow(_data, vmin=0., vmax=1., cmap=plt.cm.gray_r)
+    im = ax.imshow(_data, vmin=0., vmax=1., cmap=plt.cm.cubehelix)
     plt.title('Original')
     plt.axis('off')
     divider = make_axes_locatable(ax)
@@ -358,7 +373,7 @@ def solution_plot3D(hds):
     # approximated solution plot
     plt.subplot(1,3,2)
     ax = plt.gca()
-    im = ax.imshow(_u, vmin=0., vmax=1., cmap=plt.cm.gray_r)
+    im = ax.imshow(_u, vmin=0., vmax=1., cmap=plt.cm.cubehelix)
     plt.title('Solution')
     plt.axis('off')
     divider = make_axes_locatable(ax)
@@ -368,7 +383,7 @@ def solution_plot3D(hds):
     # residual plot
     plt.subplot(1,3,3)
     ax = plt.gca()
-    im = ax.imshow(res, vmin=0., vmax=1., cmap=plt.cm.gray_r)
+    im = ax.imshow(res, vmin=0., vmax=1., cmap=plt.cm.cubehelix)
     plt.title('Residual')
     plt.axis('off')
     divider = make_axes_locatable(ax)
@@ -380,14 +395,14 @@ def solution_plot3D(hds):
 def comparative_slices_plot(data1, data2, slc):
     plt.figure(figsize=(10,5))
     plt.subplot(1,2,1)
-    im = plt.imshow(data1[slc], vmin=0, vmax=1., cmap=plt.cm.gray_r)
+    im = plt.imshow(data1[slc], vmin=0, vmax=1., cmap=plt.cm.cubehelix)
     plt.title('3D original cube at slice: {0}'.format(slc))
     plt.axis('off')
     divider = make_axes_locatable(plt.gca())
     cax = divider.append_axes("right", size="5%", pad=0.05)
     plt.colorbar(im, cax=cax)
     plt.subplot(1,2,2)
-    im = plt.imshow(data2[slc], vmin=0, vmax=1., cmap=plt.cm.gray_r)
+    im = plt.imshow(data2[slc], vmin=0, vmax=1., cmap=plt.cm.cubehelix)
     plt.title('3D approximated cube at slice: {0}'.format(slc))
     plt.axis('off')
     divider = make_axes_locatable(plt.gca())
@@ -396,14 +411,14 @@ def comparative_slices_plot(data1, data2, slc):
     plt.show()
 
 
-def structs_plot3D(hds, structs_list, n_levels=1, save_path=None):
+def structs_plot3D(hdmc, structs_list, n_levels=1, save_path=None):
     # get all the (mapped) parameters
-    xc, yc, zc, c, sig = hds.get_params_mapped()
+    xc, yc, zc, c, sig = hdmc.get_params_mapped()
 
     # generating the evaluation points
-    _xe = np.linspace(0., 1., hds.dims[0]+2)[1:-1]
-    _ye = np.linspace(0., 1., hds.dims[1]+2)[1:-1]
-    _ze = np.linspace(0., 1., hds.dims[2]+2)[1:-1]
+    _xe = np.linspace(0., 1., hdmc.dims[0]+2)[1:-1]
+    _ye = np.linspace(0., 1., hdmc.dims[1]+2)[1:-1]
+    _ze = np.linspace(0., 1., hdmc.dims[2]+2)[1:-1]
     len_xe = len(_xe); len_ye = len(_ye); len_ze = len(_ze)
     Xe,Ye,Ze = np.meshgrid(_xe, _ye, _ze, sparse=False, indexing='ij')
     xe = Xe.ravel(); ye = Ye.ravel(); ze = Ze.ravel()
@@ -418,24 +433,24 @@ def structs_plot3D(hds, structs_list, n_levels=1, save_path=None):
         ax = plt.subplot(1,1,1)
 
         # stacked data, mapping to [0,1] and display
-        _data = hds.data.sum(axis=axis)
+        _data = hdmc.data.sum(axis=axis)
         if axis==2: _data = _data.T
         dmin = _data.min(); dmax = _data.max()
         _data -= dmin; _data /= dmax
-        ax.imshow(_data, cmap=plt.cm.gray_r, aspect='auto')
+        ax.imshow(_data, cmap=plt.cm.cubehelix, aspect='auto')
         if axis==0:       
-            plt.xlabel("RA", fontsize=20); plt.ylabel("DEC", fontsize=20)  
+            plt.xlabel("RA"); plt.ylabel("DEC")  
         elif axis==1:
-            plt.xlabel("RA", fontsize=20); plt.ylabel("FREQ", fontsize=20)
+            plt.xlabel("RA"); plt.ylabel("FREQ")
         elif axis==2:
-            plt.xlabel("FREQ", fontsize=20); plt.ylabel("DEC", fontsize=20)
+            plt.xlabel("FREQ"); plt.ylabel("DEC")
             ax.yaxis.set_label_position("right")
             ax.yaxis.tick_right()
-        ax.tick_params(axis='both', which='major', labelsize=15)
+        ax.tick_params(axis='both', which='major')
         ax.grid()
 
         # contours configuration
-        minval = ((hds.back_level*hds.dims[axis]) - dmin) / dmax
+        minval = ((hdmc.back_level*hdmc.dims[axis]) - dmin) / dmax
         levels = np.linspace(minval+0.01, 0.95, n_levels)
 
         for i,indexes in enumerate(structs_list):
@@ -444,7 +459,7 @@ def structs_plot3D(hds, structs_list, n_levels=1, save_path=None):
             _zc = zc[indexes]
             _c = c[indexes]
             _sig = sig[indexes]
-            u = u_eval3D(_c, _sig, _xc, _yc, _zc, xe, ye, ze, support=hds.support)
+            u = u_eval3D(_c, _sig, _xc, _yc, _zc, xe, ye, ze, support=hdmc.support)
             _u = u.reshape(len_xe, len_ye, len_ze).sum(axis=axis)
             if axis==2: _u = _u.T
             _u -= dmin; _u /= dmax
@@ -453,7 +468,7 @@ def structs_plot3D(hds, structs_list, n_levels=1, save_path=None):
             plt.savefig(save_path+"_{0}C_A{1}.eps".format(n_comp, axis), format='eps', dpi=150, bbox_inches='tight')
         plt.show()
 
-    total_flux = hds.data.sum()
+    total_flux = hdmc.data.sum()
     plt.figure(figsize=(8,8))
     for i,indexes in enumerate(structs_list):
         _xc = xc[indexes]
@@ -461,38 +476,38 @@ def structs_plot3D(hds, structs_list, n_levels=1, save_path=None):
         _zc = zc[indexes]
         _c = c[indexes]
         _sig = sig[indexes]
-        u = u_eval3D(_c, _sig, _xc, _yc, _zc, xe, ye, ze, support=hds.support)
+        u = u_eval3D(_c, _sig, _xc, _yc, _zc, xe, ye, ze, support=hdmc.support)
         u = u.reshape(len_xe, len_ye, len_ze)
-        #base = np.sum(u>0.)*hds.back_level
+        #base = np.sum(u>0.)*hdmc.back_level
         #_u -= dmin; _u /= dmax
         f = u.sum(axis=(1,2))
         f /= total_flux
         plt.plot(f, '--', lw=4, color=color[i], ms=6)
-    plt.xlabel("FREQ", fontsize=20)
-    plt.ylabel("Standardized flux", fontsize=20)
-    plt.tick_params(axis='both', which='major', labelsize=15)
+    plt.xlabel("FREQ")
+    plt.ylabel("Standardized flux")
+    plt.tick_params(axis='both', which='major')
     plt.grid()   
     if save_path is not None:
         plt.savefig(save_path+"_{0}C_freq.eps".format(n_comp), format='eps', dpi=150, bbox_inches='tight')
     plt.show()
 
 
-def structs_plot3D_(hds, structs_dict, n_comp):
+def structs_plot3D_(hdmc, structs_dict, n_comp):
     # get all the (mapped) parameters
-    xc, yc, zc, c, sig = hds.get_params_mapped()
+    xc, yc, zc, c, sig = hdmc.get_params_mapped()
 
     # generating the evaluation points
-    _xe = np.linspace(0., 1., hds.dims[0]+2)[1:-1]
-    _ye = np.linspace(0., 1., hds.dims[1]+2)[1:-1]
-    _ze = np.linspace(0., 1., hds.dims[2]+2)[1:-1]
+    _xe = np.linspace(0., 1., hdmc.dims[0]+2)[1:-1]
+    _ye = np.linspace(0., 1., hdmc.dims[1]+2)[1:-1]
+    _ze = np.linspace(0., 1., hdmc.dims[2]+2)[1:-1]
     len_xe = len(_xe); len_ye = len(_ye); len_ze = len(_ze)
     Xe,Ye,Ze = np.meshgrid(_xe, _ye, _ze, sparse=False, indexing='ij')
     xe = Xe.ravel(); ye = Ye.ravel(); ze = Ze.ravel()  
 
-    clump_map = np.empty(hds.dims)
+    clump_map = np.empty(hdmc.dims)
 
     # stacked data, mapping to [0,1] and display 
-    back_level = hds.back_level
+    back_level = hdmc.back_level
 
     # contours configuration
     color_index = 20.
@@ -503,9 +518,9 @@ def structs_plot3D_(hds, structs_dict, n_comp):
         _zc = zc[indexes]
         _c = c[indexes]
         _sig = sig[indexes]
-        u = u_eval3D(_c, _sig, _xc, _yc, _zc, xe, ye, ze, support=hds.support)
+        u = u_eval3D(_c, _sig, _xc, _yc, _zc, xe, ye, ze, support=hdmc.support)
         _u = u.reshape(len_xe, len_ye, len_ze)
-        clump_map[_u > hds.back_level+0.01] = color_index
+        clump_map[_u > hdmc.back_level+0.01] = color_index
         color_index += 20.
     return clump_map
 
@@ -539,22 +554,22 @@ def _stat_plot(x_var, r_stats, stat, x_label='', loglog=False, n=5, slope=None, 
     plt.subplot(1,2,1)
     plt.plot(x_var, r_stat, color=colors[i], marker='o')
     plt.grid()
-    plt.xlabel(x_label, fontsize=20)
-    plt.ylabel(y_label[i], fontsize=20)
+    plt.xlabel(x_label)
+    plt.ylabel(y_label[i])
     plt.subplot(1,2,2)
     if loglog:
         plt.loglog(x_var, r_stat, color=colors[i], marker='o')
         plt.grid()
-        plt.xlabel(x_label, fontsize=20)
-        plt.ylabel(y_label[i], fontsize=20)
+        plt.xlabel(x_label)
+        plt.ylabel(y_label[i])
         line = (r_stat[1]/x_var[1]**(slope)) * x_var**(slope)
         plt.plot(x_var, line, color='k', label='slope={0}'.format(slope))
         plt.legend(bbox_to_anchor=(1.3, 1.0))
     else:
         plt.semilogy(x_var, r_stat, color=colors[i], marker='o')
         plt.grid()
-        plt.xlabel(x_label, fontsize=20)
-        plt.ylabel(y_label[i], fontsize=20)
+        plt.xlabel(x_label)
+        plt.ylabel(y_label[i])
 
     if name is not None: plt.savefig(name, format='eps', dpi=1000, bbox_inches='tight')
     plt.show()
@@ -571,10 +586,10 @@ def stat_plots(x_var, y_list, labels, xlabel=None, ylabel=None, save_name=None, 
     colors = colors[0:len(y_list)]
     for i,y_var in enumerate(y_list):
         plt.plot(x_var, y_var, c=colors[i], marker='o', label=labels[i])
-    if xlabel is not None: plt.xlabel(xlabel, fontsize=20)
-    if ylabel is not None: plt.ylabel(ylabel, fontsize=20)
+    if xlabel is not None: plt.xlabel(xlabel)
+    if ylabel is not None: plt.ylabel(ylabel)
     plt.grid()
-    plt.tick_params(axis='both', which='major', labelsize=20)
+    plt.tick_params(axis='both', which='major')
     plt.tight_layout()
     if legend: plt.legend(loc='best', prop={'size':20})
     if save_name is not None:
@@ -594,10 +609,10 @@ def stat_plots_log(x_var, y_list, labels, xlabel=None, ylabel=None, save_name=No
     plt.subplot(1,2,1)
     for i,y_var in enumerate(y_list):
         plt.plot(x_var, y_var, c=colors[i], marker='o', label=labels[i])
-    if xlabel is not None: plt.xlabel(xlabel, fontsize=20)
-    if ylabel is not None: plt.ylabel(ylabel, fontsize=20)
+    if xlabel is not None: plt.xlabel(xlabel)
+    if ylabel is not None: plt.ylabel(ylabel)
     plt.grid()
-    plt.tick_params(axis='both', which='major', labelsize=20)
+    plt.tick_params(axis='both', which='major')
     plt.tight_layout()
     if legend: plt.legend(loc='best', prop={'size':20})
 
@@ -606,10 +621,10 @@ def stat_plots_log(x_var, y_list, labels, xlabel=None, ylabel=None, save_name=No
         plt.loglog(x_var, y_var, c=colors[i], marker='o', label=labels[i])
     y_ref = 0.01 * x_var**2
     plt.loglog(x_var, y_ref, c='red')
-    if xlabel is not None: plt.xlabel(xlabel, fontsize=20)
-    if ylabel is not None: plt.ylabel(ylabel, fontsize=20)
+    if xlabel is not None: plt.xlabel(xlabel)
+    if ylabel is not None: plt.ylabel(ylabel)
     plt.grid()
-    plt.tick_params(axis='both', which='major', labelsize=20)
+    plt.tick_params(axis='both', which='major')
     plt.tight_layout()
     #if legend: plt.legend(loc='best', prop={'size':20})
 
@@ -647,8 +662,8 @@ def all_stats_plot(x_var, r_stats, x_label='', loglog=False, n=5, slope=None, na
     m = r_stats_list[3].max()
     #plt.plot(x_var, r_stats_list[3]/m, color=colors[3], marker='o', label='Sharpness x {0:.3f}'.format(m))
     plt.grid()
-    plt.tick_params(axis='both', which='major', labelsize=20)
-    plt.xlabel(x_label, fontsize=20)
+    plt.tick_params(axis='both', which='major')
+    plt.xlabel(x_label)
     #plt.legend(bbox_to_anchor=(1.275, 1.0), prop={'size':15})
     plt.legend(loc='best', prop={'size':20})
 
