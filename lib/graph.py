@@ -8,10 +8,12 @@ from utils3D import compute_solution
 from gmr import isd_diss_full
 from points_generation import boundary_map_caa
 from astropy.visualization import AsymmetricPercentileInterval
+import astropy.units as u
 
 font = {'fontname':'Times New Roman'}
 umap = {'RA':'RA (J2000)', 'DEC':'Dec (J2000)',
-        'GLON':'Galactic Longitude', 'GLAT':'Galactic Latitude'}
+        'GLON':'Galactic Longitude', 'GLAT':'Galactic Latitude',
+        'FREQ':'FREQ [GHz]'}
 
 
 def image_plot(data, title=None, cmap=plt.cm.cubehelix, wcs=None,
@@ -181,7 +183,7 @@ def residual_plot(residual_variance, residual_entropy, residual_rms, iter_list):
 
 
     
-def points_plot(data, points=None, color=None, wcs=None, label=None, 
+def points_plot(data, points=None, color=None, wcs=None, 
                 title=None, cmap=plt.cm.cubehelix, save_path=None):
     """
     Function to plot point in the data.
@@ -197,9 +199,9 @@ def points_plot(data, points=None, color=None, wcs=None, label=None,
     fig = plt.figure(figsize=(10,10))
     if wcs is not None: fig.gca(projection=wcs)
     plt.imshow(data, cmap=cmap)
-    plt.scatter(points[:,1]*y_scale, points[:,0]*x_scale, s=35, 
-                facecolor=color, lw=0, label=label)
-    plt.legend(loc=4, prop={'size': 20})  
+    plt.scatter(points[:,1]*y_scale, points[:,0]*x_scale, s=20, 
+                facecolor=color, lw=0, alpha=0.9)
+    #plt.legend(loc=4, prop={'size': 20})  
     plt.grid()
     ax = plt.gca()
     ax.invert_yaxis()
@@ -247,7 +249,7 @@ def structs_plot(hdmc, structs_list, show_title=False, cmap1=plt.cm.cubehelix,
     maxclump = 10 # ARREGLAR ESTO!
     #color = plt.cm.rainbow(np.linspace(0., 1., maxclump))
     color = cmap2(np.linspace(0., 1., maxclump))
-    np.random.seed(23); 
+    np.random.seed(19); 
     np.random.shuffle(color)
     color = color[0:n_comp]
     levels = [0.025] # HARDCODED VALUE
@@ -286,7 +288,7 @@ def structs_plot(hdmc, structs_list, show_title=False, cmap1=plt.cm.cubehelix,
 
 
 
-def caa_show(data, caa, save_path=None,):
+def caa_show(data, caa, save_path=None, wcs=None):
     bd_map = boundary_map_caa(caa).T
     colors = plt.cm.rainbow(np.linspace(0., 1., caa.max()))
     
@@ -301,14 +303,20 @@ def caa_show(data, caa, save_path=None,):
             rgba[i,j,:] = colors[bd_map[i,j]-1]
 
     fig = plt.figure(figsize=(8,8))
+    if wcs is not None: fig.gca(projection=wcs)
     im = plt.imshow(rgba)
     plt.grid()
-    plt.tick_params(labelbottom=False, labelleft=False)
+    if wcs is not None:
+        plt.xlabel(umap[wcs.axis_type_names[0]])
+        plt.ylabel(umap[wcs.axis_type_names[1]])
+    else:
+        plt.tick_params(labelbottom=False, labelleft=False)
     ax = plt.gca()
     ax.invert_yaxis()
     if save_path is not None:
         plt.savefig(save_path, format='eps', dpi=150, bbox_inches='tight')
-    #cbar = plt.colorbar(im, ax=ax, pad=0.01, aspect=30)
+    #if wcs is not None:
+        #cbar = plt.colorbar(im, ax=ax, pad=0.01, aspect=30)
     ax.set_aspect('auto')
     plt.show()
     
@@ -316,6 +324,46 @@ def caa_show(data, caa, save_path=None,):
 ########################################################
 # 3D only functions
 ########################################################
+
+def cube_plot(data, wcs=None, cmap=plt.cm.cubehelix, unit=None):
+    plt.figure(figsize=(8.5,12))
+    if wcs is not None:
+        ax = plt.subplot(311, projection=wcs, slices=("x", 'y', 0))
+        ax.coords[2].set_major_formatter('x.x')
+        ax.coords[2].set_format_unit(u.GHz)
+        ax.set_xlabel(umap[wcs.axis_type_names[0]])
+        ax.set_ylabel(umap[wcs.axis_type_names[1]])
+    else: ax = plt.subplot(311)
+    im = ax.imshow(data.sum(axis=0), cmap=cmap)
+    cbar = plt.colorbar(im, ax=ax, pad=0.01, aspect=30)
+    if unit is not None: cbar.set_label("[{0}]".format(unit))
+    ax.set_aspect('auto')
+
+    #plt.figure(figsize=(9,9))
+    if wcs is not None:
+        ax = plt.subplot(312, projection=wcs, slices=("x",0,"y"))
+        ax.coords[2].set_major_formatter('x.x')
+        ax.coords[2].set_format_unit(u.GHz)
+        ax.set_xlabel(umap[wcs.axis_type_names[0]])
+        ax.set_ylabel(umap[wcs.axis_type_names[2]])
+    else: ax = plt.subplot(312)
+    im = ax.imshow(data.sum(axis=1), cmap=cmap)
+    cbar = plt.colorbar(im, ax=ax, pad=0.01, aspect=30)
+    if unit is not None: cbar.set_label("[{0}]".format(unit))
+    ax.set_aspect('auto')
+
+    #plt.figure(figsize=(9,9))
+    if wcs is not None:
+        ax = plt.subplot(313, projection=wcs, slices=(0,"x","y"))
+        ax.coords[2].set_major_formatter('x.x')
+        ax.coords[2].set_format_unit(u.GHz)
+        ax.set_xlabel(umap[wcs.axis_type_names[1]])
+        ax.set_ylabel(umap[wcs.axis_type_names[2]])
+    else: plt.subplot(313)
+    im = ax.imshow(data.sum(axis=2), cmap=cmap)
+    cbar = plt.colorbar(im, ax=ax, pad=0.01, aspect=30)
+    if unit is not None: cbar.set_label("[{0}]".format(unit))
+    ax.set_aspect('auto')
 
 def points_plot3D(points, title=None):
     x = points[:,0]
