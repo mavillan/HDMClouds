@@ -22,7 +22,7 @@ def u_eval(c, sig, xc, yc, xe, ye, support=5):
     for i in range(m):
         for j in range(n):
             dist2 = (xe[i]-xc[j])**2 + (ye[i]-yc[j])**2
-            if  dist2 > support**2 * sig[j]**2: continue
+            #if  dist2 > support**2 * sig[j]**2: continue
             ret[i] += c[j] * exp( -0.5 * dist2 / sig[j]**2 )
     return ret
 
@@ -142,7 +142,7 @@ def build_dist_matrix(points, inf=False):
             D[i,j] = np.linalg.norm(points[i]-points[j], ord=2)
     return D
 
-
+        
 def load_data(fits_path):
     hdu = fits.open(fits_path)[0]
     data = hdu.data

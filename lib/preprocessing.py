@@ -20,7 +20,7 @@ def compute_mask(data, back_level, min_obj_size=20, min_hole_size=10):
     square2 = square(2)
     # cleaning
     mask = binary_opening(mask, selem=disk1)
-    mask = remove_small_objects(mask.astype(bool), min_size=min_obj_size)
+    mask = remove_small_objects(mask, min_size=min_obj_size)
     mask = binary_closing(mask, selem=square2)
     mask = remove_small_holes(mask, min_size=min_hole_size)
     return mask
