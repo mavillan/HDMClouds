@@ -70,15 +70,20 @@ class HDMClouds():
     
         if data.ndim==2:
             # generating the data function
-            x = np.linspace(0., 1., data.shape[0]+2, endpoint=True)[1:-1]
-            y = np.linspace(0., 1., data.shape[1]+2, endpoint=True)[1:-1]
+            _x = np.linspace(0., 1., data.shape[0]+1, endpoint=True)
+            _y = np.linspace(0., 1., data.shape[1]+1, endpoint=True)
+            x = np.asarray( [(_x[i]+_x[i+1])/2 for i in range(len(_x)-1)] )
+            y = np.asarray( [(_y[i]+_y[i+1])/2 for i in range(len(_y)-1)] )
             dfunc = RegularGridInterpolator((x,y), data, method='linear', bounds_error=False, fill_value=0.)
 
         elif data.ndim==3:
             # generating the data function
-            x = np.linspace(0., 1., data.shape[0]+2, endpoint=True)[1:-1]
-            y = np.linspace(0., 1., data.shape[1]+2, endpoint=True)[1:-1]
-            z = np.linspace(0., 1., data.shape[2]+2, endpoint=True)[1:-1]
+            _x = np.linspace(0., 1., data.shape[0]+1, endpoint=True)
+            _y = np.linspace(0., 1., data.shape[1]+1, endpoint=True)
+            _z = np.linspace(0., 1., data.shape[2]+1, endpoint=True)
+            x = np.asarray( [(_x[i]+_x[i+1])/2 for i in range(len(_x)-1)] )
+            y = np.asarray( [(_y[i]+_y[i+1])/2 for i in range(len(_y)-1)] )
+            z = np.asarray( [(_z[i]+_z[i+1])/2 for i in range(len(_z)-1)] )
             dfunc = RegularGridInterpolator((x, y, z), data, method='linear', bounds_error=False, fill_value=0.)
 
         self.data = data
@@ -91,8 +96,10 @@ class HDMClouds():
         #######################################
         # Evaluation regular-grid points
         ####################################### 
-        _xe = np.linspace(0., 1., data.shape[0]+2)[1:-1]
-        _ye = np.linspace(0., 1., data.shape[1]+2)[1:-1]
+        _x = np.linspace(0., 1., data.shape[0]+1, endpoint=True)
+        _y = np.linspace(0., 1., data.shape[1]+1, endpoint=True)
+        _xe = np.asarray( [(_x[i]+_x[i+1])/2 for i in range(len(_x)-1)] )
+        _ye = np.asarray( [(_y[i]+_y[i+1])/2 for i in range(len(_y)-1)] )
         Xe,Ye = np.meshgrid(_xe, _ye, sparse=False, indexing='ij')
         xgrid = Xe.ravel(); ygrid = Ye.ravel()
         self.xgrid = xgrid
@@ -120,9 +127,9 @@ class HDMClouds():
 
         if verbose:
             # visualizing the choosen points
-            gp.points_plot(data, points=center_points, label="Center points", color="red", wcs=wcs)
-            gp.points_plot(data, points=collocation_points, label="Collocation points", color="blue", wcs=wcs)
-            gp.points_plot(data, points=boundary_points, label="Boundary points", color="green", wcs=wcs)
+            gp.points_plot(data, points=center_points, color="red", wcs=wcs)
+            gp.points_plot(data, points=collocation_points, color="blue", wcs=wcs)
+            gp.points_plot(data, points=boundary_points, color="green", wcs=wcs)
 
         #######################################
         # Estimating initial guess
@@ -132,14 +139,14 @@ class HDMClouds():
         if maxsig is None:
             # 30 is hardcoded...
             maxsig = 30*minsig
-        c0, sig0 = estimate_initial_guess(center_points, dfunc, minsig=minsig, 
+        w0, sig0 = estimate_initial_guess(center_points, dfunc, minsig=minsig, 
                    maxsig=maxsig, method='min_dist')
 
         if verbose:
             # visualizing the initial guess
-            gp.solution_plot(dfunc, c0, sig0, xc, yc, dims=data.shape)
-            gp.params_plot(c0, sig0, xc, yc)
-            gp.params_distribution_plot(c0, sig0)
+            gp.solution_plot(dfunc, w0, sig0, xc, yc, dims=data.shape)
+            gp.params_plot(w0, sig0, xc, yc)
+            gp.params_distribution_plot(w0, sig0)
 
         ########################################
         # HDMClouds internals
@@ -156,7 +163,7 @@ class HDMClouds():
         self.deltay = pix_freedom * 1./data.shape[1]
         self.minsig = minsig
         self.maxsig = maxsig
-        self.c = np.sqrt(c0)
+        self.w = np.sqrt(w0)
         self.sig = inv_sig_mapping(sig0, minsig, maxsig)
         self.d1psi1 = d1psi1
         self.alpha = alpha
@@ -174,8 +181,8 @@ class HDMClouds():
         self.theta_xc = theta_xc
         self.theta_yc = theta_yc
 
-    def set_c(self, c):
-        self.c = c
+    def set_w(self, w):
+        self.w = w
 
     def set_sig(self, sig):
         self.sig = sig
@@ -184,15 +191,15 @@ class HDMClouds():
         N = len(params)//4
         self.theta_xc = params[0:N]
         self.theta_yc = params[N:2*N]
-        self.c = params[2*N:3*N]
-        self.sig = params[3*N:4*N]
+        self.w = params[2*N:3*N]
+        self.sig = params[3*N:]
 
     def get_params(self):
         """
         Get the parameter of the function F (to optimize): 
         theta_xc, theta_yc, c, sig
         """
-        return np.concatenate([self.theta_xc, self.theta_yc, self.c, self.sig])
+        return np.concatenate([self.theta_xc, self.theta_yc, self.w, self.sig])
 
     def get_params_mapped(self):
         """
@@ -203,9 +210,9 @@ class HDMClouds():
         #yc = self.yc0 + self.deltay * np.sin(self.theta_yc)
         xc = self.xc
         yc = self.yc
-        c = self.c**2
+        w = self.w**2
         sig = sig_mapping(self.sig, self.minsig, self.maxsig)
-        return xc, yc, c, sig
+        return w, xc, yc, sig
 
     def get_w(self):
         """
@@ -213,15 +220,15 @@ class HDMClouds():
         combination of Gausssian functions, to the 'w' in the
         linear combination of Normal functions. 
         """
-        xc, yc, c, sig = self.get_params_mapped()
+        w, xc, yc, sig = self.get_params_mapped()
         d = len(self.dims)
-        w = c * (2*np.pi*sig**2)**(d/2.)
+        w = w * (2*np.pi*sig**2)**(d/2.)
         return w
 
 
     def get_residual_stats(self):
-        xc, yc, c, sig = self.get_params_mapped()
-        u = u_eval(c, sig, xc, yc, self.xgrid, self.ygrid)
+        w, xc, yc, sig = self.get_params_mapped()
+        u = u_eval(w, sig, xc, yc, self.xgrid, self.ygrid)
         u = u.reshape(self.dims)
 
         if self.mask is not None:
@@ -243,17 +250,10 @@ class HDMClouds():
 
 
     def get_approximation(self):
-        xc, yc, c, sig = self.get_params_mapped()
-        u = u_eval(c, sig, xc, yc, self.xgrid, self.ygrid)
+        w, xc, yc, sig = self.get_params_mapped()
+        u = u_eval(w, sig, xc, yc, self.xgrid, self.ygrid)
         u = u.reshape(self.dims)
         return u
-
-
-    def get_gradient(self):
-        xc, yc, c, sig = self.get_params_mapped()
-        grad = grad_eval(c, sig, xc, yc, self.xgrid, self.ygrid)
-        grad = grad.reshape(self.dims)
-        return grad
 
 
     def prune(self):
@@ -264,7 +264,7 @@ class HDMClouds():
         self.yc = self.yc[mask]; self.yc0 = self.yc0[mask]
         self.theta_xc = self.theta_xc[mask]
         self.theta_yc = self.theta_yc[mask]
-        self.c = self.c[mask]
+        self.w = self.w[mask]
         self.sig = self.sig[mask]
 
     
@@ -273,7 +273,7 @@ class HDMClouds():
         print('\n \n' + '#'*90)    
         print('FINAL RESULTS:')
         print('#'*90 + '\n')
-        _xc, _yc, _c, _sig = self.get_params_mapped()
+        _w, _xc, _yc, _sig = self.get_params_mapped()
 
         out = self.get_residual_stats()
         var,rms,flux_addition,flux_lost,npix = out
@@ -295,11 +295,11 @@ class HDMClouds():
             print('Total elapsed time: {0} [s]'.format(self.elapsed_time))
         
         if solution_plot:
-            gp.solution_plot(self.dfunc, _c, _sig, _xc, _yc, dims=self.dims)
+            gp.solution_plot(self.dfunc, _w, _sig, _xc, _yc, dims=self.dims)
         
         if params_plot:
-            gp.params_plot(_c, _sig, _xc, _yc)
-            gp.params_distribution_plot(_c, _sig)
+            gp.params_plot(_w, _sig, _xc, _yc)
+            gp.params_distribution_plot(_w, _sig)
 
         if histograms_plot:
             u = self.get_approximation()
@@ -318,15 +318,15 @@ class HDMClouds():
         # parameters transform/mapping
         xc = self.xc0 + self.deltax * np.sin(theta_xc)
         yc = self.yc0 + self.deltay * np.sin(theta_yc)
-        c = params[2*N:3*N]**2
-        sig = sig_mapping(params[3*N:4*N], self.minsig, self.maxsig)
+        w = params[2*N:3*N]**2
+        sig = sig_mapping(params[3*N:], self.minsig, self.maxsig)
 
         # evaluation points
         xe = np.hstack([self.xe, xc]); ye = np.hstack([self.ye, yc])
         xb = self.xb; yb = self.yb
         
         # computing the EL equation
-        u = u_eval(c, sig, xc, yc, xe, ye)
+        u = u_eval(w, sig, xc, yc, xe, ye)
         f0 = np.hstack([ self.f0, self.dfunc(np.vstack([xc,yc]).T) ])
         alpha = self.alpha; lamb = self.lamb
 
@@ -336,7 +336,7 @@ class HDMClouds():
             
         # evaluating at boundary
         fb = self.fb
-        u_boundary = u_eval(c, sig, xc, yc, self.xb, self.yb)
+        u_boundary = u_eval(w, sig, xc, yc, self.xb, self.yb)
         
         return np.concatenate([el,u_boundary-fb])
 
@@ -356,13 +356,13 @@ class HDMClouds():
         sol_length = len(sol.x)//4
         opt_theta_xc = sol.x[0:sol_length]
         opt_theta_yc = sol.x[sol_length:2*sol_length]
-        opt_c = sol.x[2*sol_length:3*sol_length]
-        opt_sig = sol.x[3*sol_length:4*sol_length]
+        opt_w = sol.x[2*sol_length:3*sol_length]
+        opt_sig = sol.x[3*sol_length:]
 
         # update to best parameters
         self.set_theta(opt_theta_xc, opt_theta_yc)
         self.set_centers(opt_theta_xc, opt_theta_yc)
-        self.set_c(opt_c)
+        self.set_w(opt_w)
         self.set_sig(opt_sig)
 
         # prune of gaussians from mixture

@@ -53,17 +53,19 @@ def thresholded_image_plot(data, level, cmap=plt.cm.cubehelix, wcs=None,
                wcs=wcs, vmin=vmin, vmax=vmax)
 
 
-def solution_plot(dfunc, c, sig, xc, yc, dims, resolution=1, mask=None,
+def solution_plot(dfunc, w, sig, xc, yc, dims, resolution=1, mask=None,
                   title=None, support=5., cmap=plt.cm.cubehelix):
-    _xe = np.linspace(0., 1., resolution*dims[0]+2)[1:-1]
-    _ye = np.linspace(0., 1., resolution*dims[1]+2)[1:-1]
+    _x = np.linspace(0., 1., resolution*dims[0]+1)
+    _y = np.linspace(0., 1., resolution*dims[1]+1)
+    _xe = np.asarray( [(_x[i]+_x[i+1])/2 for i in range(len(_x)-1)] )
+    _ye = np.asarray( [(_y[i]+_y[i+1])/2 for i in range(len(_y)-1)] )
     len_xe = len(_xe); len_ye = len(_ye)
     Xe,Ye = np.meshgrid(_xe, _ye, sparse=False, indexing='ij')
     xe = Xe.ravel(); ye = Ye.ravel()
     points = np.vstack([xe,ye]).T
 
     # approximation
-    u = u_eval(c, sig, xc, yc, xe, ye, support=support)
+    u = u_eval(w, sig, xc, yc, xe, ye)
     u = u.reshape(len_xe, len_ye)
 
     # real data
@@ -464,6 +466,7 @@ def structs_plot3D(hdmc, structs_list, n_levels=1, save_path=None):
     xc, yc, zc, c, sig = hdmc.get_params_mapped()
 
     # generating the evaluation points
+    # FIX POINTS POSITIONS IN THE NEAR FUTURE
     _xe = np.linspace(0., 1., hdmc.dims[0]+2)[1:-1]
     _ye = np.linspace(0., 1., hdmc.dims[1]+2)[1:-1]
     _ze = np.linspace(0., 1., hdmc.dims[2]+2)[1:-1]

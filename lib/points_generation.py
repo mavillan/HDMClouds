@@ -18,6 +18,10 @@ def _inv_gaussian_kernel(kernlen=3, sig=0.1):
 
 
 def random_centers_generation(data, n_centers, back_level=None, power=2., umask=None):
+    """
+    DEPRECATED!
+    """
+
     # fixed seed
     np.random.seed(0)
 
@@ -171,8 +175,10 @@ def boundary_points_generation(data, mask, n_points, method='sampling'):
         prob[border_map] = 1./np.sum(border_map)
 
         # center points positions
-        x = np.linspace(0., 1., m+2, endpoint=True)[1:-1]
-        y = np.linspace(0., 1., n+2, endpoint=True)[1:-1]
+        _x = np.linspace(0., 1., m+1, endpoint=True)
+        _y = np.linspace(0., 1., n+1, endpoint=True)
+        x = np.asarray( [(_x[i]+_x[i+1])/2 for i in range(len(_x)-1)] )
+        y = np.asarray( [(_y[i]+_y[i+1])/2 for i in range(len(_y)-1)] )
         X,Y  = np.meshgrid(x, y, indexing='ij')
         points_positions = np.vstack( [ X.ravel(), Y.ravel() ]).T
         
