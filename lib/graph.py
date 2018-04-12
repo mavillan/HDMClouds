@@ -17,7 +17,7 @@ umap = {'RA':'RA (J2000)', 'DEC':'Dec (J2000)',
 
 
 def image_plot(data, title=None, cmap=plt.cm.cubehelix, wcs=None,
-               vmin=None, vmax=None, unit=None):
+               vmin=None, vmax=None, unit=None, save_path=None):
     fig = plt.figure(figsize=(12,9))
     if wcs is not None: fig.gca(projection=wcs)
     if vmin is None or vmax is None:
@@ -36,6 +36,8 @@ def image_plot(data, title=None, cmap=plt.cm.cubehelix, wcs=None,
     cbar = plt.colorbar(im, ax=ax, pad=0.01, aspect=30)
     if unit is not None: cbar.set_label("[{0}]".format(unit))
     ax.set_aspect('auto')
+    if save_path is not None:
+        plt.savefig(save_path, format='eps', dpi=50, bbox_inches='tight')
     plt.show()
 
 
