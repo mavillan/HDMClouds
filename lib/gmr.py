@@ -68,13 +68,24 @@ def ncomp_finder(kl_hist, w_size=10):
 # MOMENT PRESERVING GAUSSIAN
 #################################################################
 
+
 @numba.jit('Tuple((float64, float64[:], float64[:,:])) (float64, float64[:], \
             float64[:,:], float64, float64[:], float64[:,:])', nopython=True)
-def merge(c1, mu1, sig1, c2, mu2, sig2):
-    c_m = c1+c2
-    mu_m = (c1/c_m)*mu1 + (c2/c_m)*mu2
-    sig_m = (c1/c_m)*sig1 + (c2/c_m)*sig2 + (c1/c_m)*(c2/c_m)*_outer(mu1-mu2, mu1-mu2)
-    return (c_m, mu_m, sig_m)
+def merge(w1, mu1, sig1, w2, mu2, sig2):
+    w_m = w1+w2
+    mu_m = (w1/w_m)*mu1 + (w2/w_m)*mu2
+    sig_m = (w1/w_m)*sig1 + (w2/w_m)*sig2 + (w1*w2/w_m**2)*_outer(mu1-mu2, mu1-mu2)
+    return (w_m, mu_m, sig_m)
+
+
+@numba.jit('Tuple((float64, float64[:], float64[:,:])) (float64, float64[:], \
+            float64[:,:], float64, float64[:], float64[:,:])', nopython=True)
+def isomorphic_merge(w1, mu1, sig1, w2, mu2, sig2):
+    d = len(mu1)
+    w_m = w1+w2
+    mu_m = (w1/w_m)*mu1 + (w2/w_m)*mu2
+    sig_m = (w1/w_m)*sig1 + (w2/w_m)*sig2 + (w1*w2/w_m**2) * np.linalg.det(_outer(mu1-mu2, mu1-mu2))**(1./d) * np.identity(d)
+    return (w_m, mu_m, sig_m)
 
 
 @numba.jit('Tuple((float64, float64[:], float64[:,:])) (float64[:], \
@@ -187,31 +198,87 @@ def isd_diss_full_(w1, mu1, sig1, w2, mu2, sig2):
 # ref: A Kullback-Leibler Approach to Gaussian Mixture Reduction
 #################################################################
 @numba.jit('float64 (float64, float64[:], float64[:,:], float64, float64[:], float64[:,:])', nopython=True)
-def kl_diss(c1, mu1, sig1, c2, mu2, sig2):
+def kl_diss(w1, mu1, sig1, w2, mu2, sig2):
     # merged moment preserving gaussian
-    c_m, mu_m, sig_m = merge(c1, mu1, sig1, c2, mu2, sig2)
+    w_m, mu_m, sig_m = merge(w1, mu1, sig1, w2, mu2, sig2)
     # KL divergence upper bound as proposed in: A Kullback-Leibler Approach to Gaussian Mixture Reduction
     if len(sig_m)==2:
-        return 0.5*((c1+c2)*np.log(_det2D(sig_m)) - c1*np.log(_det2D(sig1)) - c2*np.log(_det2D(sig2)))
+        return 0.5*((w1+w2)*np.log(_det2D(sig_m)) - w1*np.log(_det2D(sig1)) - w2*np.log(_det2D(sig2)))
     else:
-        return 0.5*((c1+c2)*np.log(_det3D(sig_m)) - c1*np.log(_det3D(sig1)) - c2*np.log(_det3D(sig2)))
+        return 0.5*((w1+w2)*np.log(_det3D(sig_m)) - w1*np.log(_det3D(sig1)) - w2*np.log(_det3D(sig2)))
 
 
 #################################################################
 # MAIN GAUSSIAN REDUCTION FUNCTION
 #################################################################
-def gaussian_reduction(c, mu, sig, n_comp, metric='KL', verbose=True):
-    if metric=='KL': 
-        _metric = kl_diss
-        isd_hist = list(); kl_hist = list()
-    elif metric=='ISD': 
-        _metric = isd_diss
-        isd_hist = list(); kl_hist = None
-    elif metric=='ISD_':
-        _metric = isd_diss_
-        isd_hist = list(); kl_hist = None
-    else: return None
+# def gaussian_reduction(c, mu, sig, n_comp, metric='KL', verbose=True):
+#     if metric=='KL': 
+#         _metric = kl_diss
+#         isd_hist = list(); kl_hist = list()
+#     elif metric=='ISD': 
+#         _metric = isd_diss
+#         isd_hist = list(); kl_hist = None
+#     elif metric=='ISD_':
+#         _metric = isd_diss_
+#         isd_hist = list(); kl_hist = None
+#     else: return None
 
+#     d = mu.shape[1]
+#     c = c.tolist()
+#     mu = list(map(np.array, mu.tolist()))
+#     if d==2: sig = [(s**2)*np.identity(2) for s in sig]
+#     elif d==3: sig = [(s**2)*np.identity(3) for s in sig]
+
+#     # indexes of the actual gaussian components
+#     components = [i for i in range(len(c))]
+#     structs_dict = {i:[i] for i in range(len(c))}
+#     htree = {}
+#     new_comp = len(c)
+
+#     # main loop
+#     while len(components)>n_comp:
+#         m = len(components)
+#         diss_min = np.inf
+#         for i in range(m):
+#             ii = components[i]
+#             for j in range(i+1,m):
+#                 jj = components[j]
+#                 diss = _metric(c[ii], mu[ii], sig[ii], c[jj], mu[jj], sig[jj])
+#                 if diss < diss_min: 
+#                     i_min = i; j_min = j
+#                     ii_min = ii; jj_min = jj 
+#                     diss_min = diss
+#         # compute the moment preserving  merged gaussian
+#         w_m, mu_m, sig_m = merge(c[ii_min], mu[ii_min], sig[ii_min], 
+#                                  c[jj_min], mu[jj_min], sig[jj_min])
+        
+#         if (metric=='ISD' or metric=='ISD_') and verbose:
+#             print('Merged components {0} and {1} with {2} ISD dist'.format(ii_min, jj_min, diss_min))
+#             isd_hist.append(diss_min)    
+#         elif metric=='KL' and verbose:
+#             ISD_diss = isd_diss(c[ii_min], mu[ii_min], sig[ii_min], c[jj_min], mu[jj_min], sig[jj_min])
+#             print('Merged components {0} and {1} with {2} KL dist and {3} ISD dist'.format(ii_min, jj_min, diss_min, ISD_diss))
+#             isd_hist.append(ISD_diss), kl_hist.append(diss_min)
+
+#         # updating structures   
+#         del components[max(i_min, j_min)]
+#         del components[min(i_min, j_min)]
+#         components.append(new_comp)
+#         c.append(w_m); mu.append(mu_m); sig.append(sig_m)
+#         htree[new_comp] = (min(ii_min,jj_min), max(ii_min,jj_min))
+#         tmp = structs_dict[min(ii_min,jj_min)] + structs_dict[max(ii_min,jj_min)]
+#         tmp.sort()
+#         structs_dict[new_comp] = tmp
+#         new_comp += 1
+    
+#     #return structs_dict,htree
+#     return c,mu,sig
+
+
+def gaussian_reduction(c, mu, sig, n_comp, metric=kl_diss, verbose=True):
+    """
+    Gaussian Mixture Reduction Through KL-upper bound approach
+    """
     d = mu.shape[1]
     c = c.tolist()
     mu = list(map(np.array, mu.tolist()))
@@ -232,28 +299,24 @@ def gaussian_reduction(c, mu, sig, n_comp, metric='KL', verbose=True):
             ii = components[i]
             for j in range(i+1,m):
                 jj = components[j]
-                diss = _metric(c[ii], mu[ii], sig[ii], c[jj], mu[jj], sig[jj])
+                diss = metric(c[ii], mu[ii], sig[ii], c[jj], mu[jj], sig[jj])
                 if diss < diss_min: 
                     i_min = i; j_min = j
                     ii_min = ii; jj_min = jj 
                     diss_min = diss
         # compute the moment preserving  merged gaussian
-        c_m, mu_m, sig_m = merge(c[ii_min], mu[ii_min], sig[ii_min], 
+        w_m, mu_m, sig_m = merge(c[ii_min], mu[ii_min], sig[ii_min], 
                                  c[jj_min], mu[jj_min], sig[jj_min])
-        
-        if (metric=='ISD' or metric=='ISD_') and verbose:
-            print('Merged components {0} and {1} with {2} ISD dist'.format(ii_min, jj_min, diss_min))
-            isd_hist.append(diss_min)    
-        elif metric=='KL' and verbose:
+          
+        if verbose:
             ISD_diss = isd_diss(c[ii_min], mu[ii_min], sig[ii_min], c[jj_min], mu[jj_min], sig[jj_min])
             print('Merged components {0} and {1} with {2} KL dist and {3} ISD dist'.format(ii_min, jj_min, diss_min, ISD_diss))
-            isd_hist.append(ISD_diss), kl_hist.append(diss_min)
 
         # updating structures   
         del components[max(i_min, j_min)]
         del components[min(i_min, j_min)]
         components.append(new_comp)
-        c.append(c_m); mu.append(mu_m); sig.append(sig_m)
+        c.append(w_m); mu.append(mu_m); sig.append(sig_m)
         htree[new_comp] = (min(ii_min,jj_min), max(ii_min,jj_min))
         tmp = structs_dict[min(ii_min,jj_min)] + structs_dict[max(ii_min,jj_min)]
         tmp.sort()
@@ -261,3 +324,44 @@ def gaussian_reduction(c, mu, sig, n_comp, metric='KL', verbose=True):
         new_comp += 1
     
     return structs_dict,htree
+    #return c,mu,sig
+
+def mixture_reduction(c, mu, sig, n_comp, metric=kl_diss, isomorphic=False, verbose=True):
+    """
+    Gaussian Mixture Reduction Through KL-upper bound approach
+    """
+    d = mu.shape[1]
+    c = c.tolist()
+    mu = list(map(np.array, mu.tolist()))
+    if d==2: sig = [(s**2)*np.identity(2) for s in sig]
+    elif d==3: sig = [(s**2)*np.identity(3) for s in sig]
+
+    # main loop
+    while len(c)>n_comp:
+        m = len(c)
+        diss_min = np.inf
+        for i in range(m):
+            for j in range(i+1,m):
+                diss = metric(c[i], mu[i], sig[i], c[j], mu[j], sig[j])
+                if diss < diss_min: 
+                    i_min = i; j_min = j
+                    diss_min = diss
+        # compute the moment preserving  merged gaussian
+        if not isomorphic:
+            w_m, mu_m, sig_m = merge(c[i_min], mu[i_min], sig[i_min], 
+                                     c[j_min], mu[j_min], sig[j_min])
+        else:
+            w_m, mu_m, sig_m = isomorphic_merge(c[i_min], mu[i_min], sig[i_min], 
+                                     c[j_min], mu[j_min], sig[j_min])
+          
+        if verbose:
+            ISD_diss = isd_diss(c[i_min], mu[i_min], sig[i_min], c[j_min], mu[j_min], sig[j_min])
+            print('Merged components {0} and {1} with {2} KL dist and {3} ISD dist'.format(i_min, j_min, diss_min, ISD_diss))
+
+        # updating structures   
+        del c[max(i_min, j_min)]; del c[min(i_min, j_min)]
+        del mu[max(i_min, j_min)]; del mu[min(i_min, j_min)]
+        del sig[max(i_min, j_min)]; del sig[min(i_min, j_min)]
+        c.append(w_m); mu.append(mu_m); sig.append(sig_m)
+
+    return c,mu,sig
