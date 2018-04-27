@@ -1,6 +1,7 @@
 import copy
 import numba
 import numpy as np
+from sklearn.neighbors import NearestNeighbors
 
 ################################################################
 # HELPER FUNCTIONS
@@ -16,16 +17,20 @@ def _outer(x, y):
             res[i, j] = x[i]*y[j]
     return res
 
-@numba.jit('float64 (float64[:,:])', nopython=True)
-def _det2D(X):
-    return X[0,0]*X[1,1] - X[0,1]*X[1,0]
-
 
 @numba.jit('float64 (float64[:,:])', nopython=True)
-def _det3D(X):
-    return X[0,0] * (X[1,1] * X[2,2] - X[2,1] * X[1,2]) - \
-           X[1,0] * (X[0,1] * X[2,2] - X[2,1] * X[0,2]) + \
-           X[2,0] * (X[0,1] * X[1,2] - X[1,1] * X[0,2])
+def _det(X):
+    """
+    Direct computation of determinant for 
+    matrices of size 2x2 and 3x3
+    """
+    n = X.shape[0]
+    if n==2:
+        return X[0,0]*X[1,1] - X[0,1]*X[1,0]
+    else:
+        return X[0,0] * (X[1,1] * X[2,2] - X[2,1] * X[1,2]) - \
+               X[1,0] * (X[0,1] * X[2,2] - X[2,1] * X[0,2]) + \
+               X[2,0] * (X[0,1] * X[1,2] - X[1,1] * X[0,2])
 
 
 @numba.jit('float64 (float64[:], float64[:], float64[:,:])', nopython=True)
@@ -84,7 +89,7 @@ def isomorphic_merge(w1, mu1, sig1, w2, mu2, sig2):
     d = len(mu1)
     w_m = w1+w2
     mu_m = (w1/w_m)*mu1 + (w2/w_m)*mu2
-    sig_m = (w1/w_m)*sig1 + (w2/w_m)*sig2 + (w1*w2/w_m**2) * np.linalg.det(_outer(mu1-mu2, mu1-mu2))**(1./d) * np.identity(d)
+    sig_m = (w1/w_m)*sig1 + (w2/w_m)*sig2 + (w1*w2/w_m**2) * np.abs(_det(_outer(mu1-mu2, mu1-mu2)))**(1./d) * np.identity(d)
     return (w_m, mu_m, sig_m)
 
 
@@ -202,10 +207,7 @@ def kl_diss(w1, mu1, sig1, w2, mu2, sig2):
     # merged moment preserving gaussian
     w_m, mu_m, sig_m = merge(w1, mu1, sig1, w2, mu2, sig2)
     # KL divergence upper bound as proposed in: A Kullback-Leibler Approach to Gaussian Mixture Reduction
-    if len(sig_m)==2:
-        return 0.5*((w1+w2)*np.log(_det2D(sig_m)) - w1*np.log(_det2D(sig1)) - w2*np.log(_det2D(sig2)))
-    else:
-        return 0.5*((w1+w2)*np.log(_det3D(sig_m)) - w1*np.log(_det3D(sig1)) - w2*np.log(_det3D(sig2)))
+    return 0.5*((w1+w2)*np.log(_det(sig_m)) - w1*np.log(_det(sig1)) - w2*np.log(_det(sig2)))
 
 
 #################################################################
@@ -323,25 +325,63 @@ def gaussian_reduction(c, mu, sig, n_comp, metric=kl_diss, verbose=True):
         structs_dict[new_comp] = tmp
         new_comp += 1
     
-    return structs_dict,htree
-    #return c,mu,sig
+    #return structs_dict,htree
+    # return c,mu,sig
+
+
+def update_nn_indexes(nn_indexes, ind1, ind2, indm):
+    for ll in nn_indexes.values():
+        flag = False
+        if ind1 in ll: 
+            ll.remove(ind1)
+            flag = True
+        if ind2 in ll:
+            ll.remove(ind2)
+            flag = True
+        if flag:
+            ll.append(indm)
+
+
+def radius_search(nn, mu, deleted):
+    ss = set(nn.radius_neighbors([mu], return_distance=False)[0])
+    return list(ss-deleted)
+
 
 def mixture_reduction(c, mu, sig, n_comp, metric=kl_diss, isomorphic=False, verbose=True):
     """
     Gaussian Mixture Reduction Through KL-upper bound approach
     """
+
+    # We consider neighbors at a radius equivalent to the lenght of 5 pixels
+    if sig.ndim==1:
+        nn = NearestNeighbors(radius=5*np.max(sig), algorithm="ball_tree", n_jobs=2)
+    else:
+        nn = NearestNeighbors(radius=5*np.max(sig)**(1./2), algorithm="ball_tree", n_jobs=2)
+    nn.fit(mu)
+    nn_indexes = dict()
+    for i,arr in enumerate(nn.radius_neighbors(mu, return_distance=False)):
+        ll = list(arr); ll.remove(i); ll.sort()
+        nn_indexes[i] = ll
+
+    # cast to list
     d = mu.shape[1]
-    c = c.tolist()
-    mu = list(map(np.array, mu.tolist()))
-    if d==2: sig = [(s**2)*np.identity(2) for s in sig]
-    elif d==3: sig = [(s**2)*np.identity(3) for s in sig]
+    c = {i:val for i,val in enumerate(c)} 
+    mu = {i:val for i,val in enumerate(mu)}
+    if sig.ndim==1:
+        sig = {i:(val**2)*np.identity(d) for i,val in enumerate(sig)}
+    else:
+        sig = {i:cov for i,cov in enumerate(sig)}
+
+
+    # components indexes
+    nindex = len(c)
+    deleted = set()
 
     # main loop
-    while len(c)>n_comp:
-        m = len(c)
+    while len(nn_indexes)>n_comp:
         diss_min = np.inf
-        for i in range(m):
-            for j in range(i+1,m):
+        for i in nn_indexes:
+            for j in nn_indexes[i]:
                 diss = metric(c[i], mu[i], sig[i], c[j], mu[j], sig[j])
                 if diss < diss_min: 
                     i_min = i; j_min = j
@@ -352,16 +392,24 @@ def mixture_reduction(c, mu, sig, n_comp, metric=kl_diss, isomorphic=False, verb
                                      c[j_min], mu[j_min], sig[j_min])
         else:
             w_m, mu_m, sig_m = isomorphic_merge(c[i_min], mu[i_min], sig[i_min], 
-                                     c[j_min], mu[j_min], sig[j_min])
-          
+                                                c[j_min], mu[j_min], sig[j_min])
+        
         if verbose:
             ISD_diss = isd_diss(c[i_min], mu[i_min], sig[i_min], c[j_min], mu[j_min], sig[j_min])
             print('Merged components {0} and {1} with {2} KL dist and {3} ISD dist'.format(i_min, j_min, diss_min, ISD_diss))
 
-        # updating structures   
-        del c[max(i_min, j_min)]; del c[min(i_min, j_min)]
-        del mu[max(i_min, j_min)]; del mu[min(i_min, j_min)]
-        del sig[max(i_min, j_min)]; del sig[min(i_min, j_min)]
-        c.append(w_m); mu.append(mu_m); sig.append(sig_m)
+        # updating structures        
+        del c[i_min]; del c[j_min]; c[nindex] = w_m
+        del mu[i_min]; del mu[j_min]; mu[nindex] = mu_m
+        del sig[i_min]; del sig[j_min]; sig[nindex] = sig_m
+        deleted.add(i_min); deleted.add(j_min)
 
-    return c,mu,sig
+        # Nearest neighbors for new merged gaussian
+        del nn_indexes[i_min]; del nn_indexes[j_min]
+        update_nn_indexes(nn_indexes, i_min, j_min, nindex)
+        nn_indexes[nindex] = radius_search(nn, mu_m, deleted)
+        nindex += 1
+
+    return np.asarray(list(c.values())), np.asarray(list(mu.values())), np.asarray(list(sig.values()))
+
+
