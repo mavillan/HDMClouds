@@ -55,39 +55,77 @@ def thresholded_image_plot(data, level, cmap=plt.cm.cubehelix, wcs=None,
                wcs=wcs, vmin=vmin, vmax=vmax)
 
 
-def solution_plot(dfunc, w, sig, xc, yc, dims, resolution=1, mask=None,
-                  title=None, support=5., cmap=plt.cm.cubehelix):
-    _x = np.linspace(0., 1., resolution*dims[0]+1)
-    _y = np.linspace(0., 1., resolution*dims[1]+1)
-    _xe = np.asarray( [(_x[i]+_x[i+1])/2 for i in range(len(_x)-1)] )
-    _ye = np.asarray( [(_y[i]+_y[i+1])/2 for i in range(len(_y)-1)] )
-    len_xe = len(_xe); len_ye = len(_ye)
-    Xe,Ye = np.meshgrid(_xe, _ye, sparse=False, indexing='ij')
-    xe = Xe.ravel(); ye = Ye.ravel()
-    points = np.vstack([xe,ye]).T
+# def solution_plot(dfunc, w, sig, xc, yc, dims, resolution=1, mask=None,
+#                   title=None, support=5., cmap=plt.cm.cubehelix):
+#     _x = np.linspace(0., 1., resolution*dims[0]+1)
+#     _y = np.linspace(0., 1., resolution*dims[1]+1)
+#     _xe = np.asarray( [(_x[i]+_x[i+1])/2 for i in range(len(_x)-1)] )
+#     _ye = np.asarray( [(_y[i]+_y[i+1])/2 for i in range(len(_y)-1)] )
+#     len_xe = len(_xe); len_ye = len(_ye)
+#     Xe,Ye = np.meshgrid(_xe, _ye, sparse=False, indexing='ij')
+#     xe = Xe.ravel(); ye = Ye.ravel()
+#     points = np.vstack([xe,ye]).T
 
-    # approximation
-    u = u_eval(w, sig, xc, yc, xe, ye)
-    u = u.reshape(len_xe, len_ye)
+#     # approximation
+#     u = u_eval(w, sig, xc, yc, xe, ye)
+#     u = u.reshape(len_xe, len_ye)
 
-    # real data
-    f = dfunc(points).reshape(dims)
+#     # real data
+#     f = dfunc(points).reshape(dims)
 
-    # residual
-    res = f-u
+#     # residual
+#     res = f-u
 
-    # unusable pixels are fixed to 0
-    if mask is not None: 
-        u[~mask] = 0.
-        f[~mask] = 0.
-        res[~mask] = 0.
+#     # unusable pixels are fixed to 0
+#     if mask is not None: 
+#         u[~mask] = 0.
+#         f[~mask] = 0.
+#         res[~mask] = 0.
 
+#     # original data plot
+#     plt.figure(figsize=(18,12))
+#     plt.subplot(1,3,1)
+#     ax = plt.gca()
+#     im = ax.imshow(f, vmin=0., vmax=1., cmap=plt.cm.cubehelix)
+#     plt.title('Original')
+#     plt.axis('off')
+#     ax.invert_yaxis()
+#     divider = make_axes_locatable(ax)
+#     cax = divider.append_axes("right", size="5%", pad=0.05)
+#     plt.colorbar(im, cax=cax)
+    
+#     # approximated solution plot
+#     plt.subplot(1,3,2)
+#     ax = plt.gca()
+#     im = ax.imshow(u, vmin=0., vmax=1., cmap=plt.cm.cubehelix)
+#     plt.title('Solution')
+#     plt.axis('off')
+#     ax.invert_yaxis()
+#     divider = make_axes_locatable(ax)
+#     cax = divider.append_axes("right", size="5%", pad=0.05)
+#     plt.colorbar(im, cax=cax)
+    
+#     # residual plot
+#     plt.subplot(1,3,3)
+#     ax = plt.gca()
+#     im = ax.imshow(res, vmin=0., vmax=1., cmap=plt.cm.cubehelix)
+#     plt.title('Residual')
+#     plt.axis('off')
+#     ax.invert_yaxis()
+#     divider = make_axes_locatable(ax)
+#     cax = divider.append_axes("right", size="5%", pad=0.05)
+#     plt.colorbar(im, cax=cax)
+#     plt.show()
+
+
+
+def solution_plot(data, u, res, title=None, cmap=plt.cm.cubehelix):
     # original data plot
     plt.figure(figsize=(18,12))
     plt.subplot(1,3,1)
     ax = plt.gca()
-    im = ax.imshow(f, vmin=0., vmax=1., cmap=plt.cm.cubehelix)
-    plt.title('Original')
+    im = ax.imshow(data, vmin=data.min(), vmax=data.max(), cmap=plt.cm.cubehelix)
+    plt.title('Original data')
     plt.axis('off')
     ax.invert_yaxis()
     divider = make_axes_locatable(ax)
@@ -97,8 +135,8 @@ def solution_plot(dfunc, w, sig, xc, yc, dims, resolution=1, mask=None,
     # approximated solution plot
     plt.subplot(1,3,2)
     ax = plt.gca()
-    im = ax.imshow(u, vmin=0., vmax=1., cmap=plt.cm.cubehelix)
-    plt.title('Solution')
+    im = ax.imshow(u, vmin=u.min(), vmax=u.max(), cmap=plt.cm.cubehelix)
+    plt.title('GM')
     plt.axis('off')
     ax.invert_yaxis()
     divider = make_axes_locatable(ax)
@@ -108,7 +146,7 @@ def solution_plot(dfunc, w, sig, xc, yc, dims, resolution=1, mask=None,
     # residual plot
     plt.subplot(1,3,3)
     ax = plt.gca()
-    im = ax.imshow(res, vmin=0., vmax=1., cmap=plt.cm.cubehelix)
+    im = ax.imshow(res, vmin=res.min(), vmax=res.max(), cmap=plt.cm.RdBu_r)
     plt.title('Residual')
     plt.axis('off')
     ax.invert_yaxis()
