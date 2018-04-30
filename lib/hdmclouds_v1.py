@@ -106,6 +106,7 @@ class HDMClouds():
         xgrid = Xe.ravel(); ygrid = Ye.ravel()
         self.xgrid = xgrid
         self.ygrid = ygrid
+        points_grid = np.vstack([xgrid,ygrid]).T
 
 
         #######################################
@@ -117,6 +118,7 @@ class HDMClouds():
         # right format
         xb = boundary_points[:,0]
         yb = boundary_points[:,1]
+        points_bound = np.vstack([xb,yb]).T
 
         #######################################
         # Estimating initial guess
@@ -134,7 +136,7 @@ class HDMClouds():
         sig = (pix_lenght/(2.*k))*np.ones(w.shape[0])
 
         # re-normalizing w
-        u = u_eval(w, sig, xc, yc, xgrid, ygrid)
+        u = gm_eval(w, sig, xc, yc, xgrid, ygrid)
         w *= data.max()/u.max()
 
         # agglomeration
@@ -145,6 +147,7 @@ class HDMClouds():
         ye = mu_red[:,1]
         #xe = Xe[mask]
         #ye = Ye[mask]
+        points_eval = np.vstack([xe,ye]).T
 
         # agglomeration must go on
         w_red,mu_red,sig_red = mixture_reduction(w_red, mu_red, sig_red, n_center, verbose=False)
@@ -165,6 +168,23 @@ class HDMClouds():
             collocation_points = np.vstack([xe,ye]).T
             gp.points_plot(data, points=center_points, color="red", wcs=wcs)
             gp.points_plot(data, points=collocation_points, color="blue", wcs=wcs)
+
+
+        ########################################
+        # Computing neighbor indexes for 
+        # fast evaluation
+        ########################################
+        neigh_indexes,neigh_indexes_aux = compute_neighbors(mu_red, points_eval, 5*np.max(sig_red))
+        self.nind1 = neigh_indexes
+        self.nind_aux1 = neigh_indexes_aux
+
+        #neigh_indexes,neigh_indexes_aux = compute_neighbors(mu_red, points_bound, 5*np.max(sig_red))
+        #self.nind2 = neigh_indexes
+        #self.nind_aux2 = neigh_indexes_aux
+
+        neigh_indexes,neigh_indexes_aux = compute_neighbors(mu_red, points_grid, 5*np.max(sig_red))
+        self.nind3 = neigh_indexes
+        self.nind_aux3 = neigh_indexes_aux
 
 
         ########################################
@@ -232,7 +252,7 @@ class HDMClouds():
 
     def get_approximation(self):
         w,sig = self.get_params_mapped()
-        u = u_eval(w, sig, self.xc, self.yc, self.xgrid, self.ygrid)
+        u = gm_eval_fast(w, sig, self.xc, self.yc, self.xgrid, self.ygrid, self.nind3, self.nind_aux3)
         u = u.reshape(self.dims)
         return u
 
@@ -329,7 +349,7 @@ class HDMClouds():
         sig = sig_mapping(params[N:], self.minsig, self.maxsig)
         
         # computing the EL equation
-        u = u_eval(w, sig, self.xc, self.yc, self.xe, self.ye)
+        u = gm_eval_fast(w, sig, self.xc, self.yc, self.xe, self.ye, self.nind1, self.nind_aux1)
 
         # evaluation of the el equation
         f0 = self.f0
@@ -340,7 +360,8 @@ class HDMClouds():
             
         # evaluating at the boundary
         fb = self.fb
-        u_boundary = u_eval(w, sig, self.xc, self.yc, self.xb, self.yb)
+        #u_boundary = gm_eval_fast(w, sig, self.xc, self.yc, self.xb, self.yb, self.nind2, self.nind_aux2)
+        u_boundary = gm_eval(w, sig, self.xc, self.yc, self.xb, self.yb)
         
         return np.concatenate([el,u_boundary-fb])
 

@@ -134,7 +134,7 @@ class HDMClouds():
         sig = (pix_lenght/(2.*k))*np.ones(w.shape[0])
 
         # re-normalizing w
-        u = u_eval(w, sig, xc, yc, xgrid, ygrid)
+        u = gm_eval(w, sig, xc, yc, xgrid, ygrid)
         w *= data.max()/u.max()
 
         # agglomeration
@@ -232,7 +232,7 @@ class HDMClouds():
 
     def get_approximation(self):
         w,sig = self.get_params_mapped()
-        u = u_eval(w, sig, self.xc, self.yc, self.xgrid, self.ygrid)
+        u = gm_eval(w, sig, self.xc, self.yc, self.xgrid, self.ygrid)
         u = u.reshape(self.dims)
         return u
 
@@ -329,7 +329,7 @@ class HDMClouds():
         sig = sig_mapping(params[N:], self.minsig, self.maxsig)
         
         # computing the EL equation
-        u = u_eval(w, sig, self.xc, self.yc, self.xe, self.ye)
+        u = gm_eval(w, sig, self.xc, self.yc, self.xe, self.ye)
 
         # evaluation of the el equation
         f0 = self.f0
@@ -340,7 +340,7 @@ class HDMClouds():
             
         # evaluating at the boundary
         fb = self.fb
-        u_boundary = u_eval(w, sig, self.xc, self.yc, self.xb, self.yb)
+        u_boundary = gm_eval(w, sig, self.xc, self.yc, self.xb, self.yb)
         
         return np.concatenate([el,u_boundary-fb])
 

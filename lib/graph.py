@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from utils import u_eval
+from utils import gm_eval
 from utils3D import u_eval as u_eval3D
 from utils3D import compute_solution
 from gmr import isd_diss_full
@@ -308,7 +308,7 @@ def structs_plot(hdmc, structs_list, show_title=False, cmap1=plt.cm.cubehelix,
         _yc = yc[indexes]
         _c = c[indexes]
         _sig = sig[indexes]
-        u = u_eval(_c, _sig, _xc, _yc, xgrid, ygrid)
+        u = gm_eval(_c, _sig, _xc, _yc, xgrid, ygrid)
         _u = u.reshape(hdmc.dims)
 
         if show_isd:

@@ -8,14 +8,27 @@ import scipy as sp
 import numexpr as ne
 from math import sqrt, exp
 from scipy.interpolate import RegularGridInterpolator
+from sklearn.neighbors import NearestNeighbors
 from astropy.io import fits
 from astropy.wcs import WCS
 from astropy.utils.exceptions import AstropyWarning
 warnings.simplefilter('ignore', category=AstropyWarning)
 
 
+
+
 @numba.jit(nopython=True)
-def u_eval(c, sig, xc, yc, xe, ye, support=5):
+def gm_eval(c, sig, xc, yc, xe, ye, support=5):    
+    """
+    Fast evaluation of the Gaussian Mixture
+
+    w     : 1D np.ndarray - weight values
+    sig   : 1D np.ndarray - sigma values
+    xc    : 1D np.ndarray - x coordinate of center points
+    yc    : 1D np.ndarray - y coordinate of center points
+    xe    : 1D np.ndarray - x coordinate of eval points
+    ye    : 1D np.ndarray - y coordinate of eval points
+    """
     m = len(xe)
     n = len(xc)
     ret = np.zeros(m)
@@ -24,6 +37,34 @@ def u_eval(c, sig, xc, yc, xe, ye, support=5):
             dist2 = (xe[i]-xc[j])**2 + (ye[i]-yc[j])**2
             #if  dist2 > support**2 * sig[j]**2: continue
             ret[i] += c[j] * exp( -0.5 * dist2 / sig[j]**2 )
+    return ret
+
+
+@numba.jit(nopython=True)
+def gm_eval_fast(w, sig, xc, yc, xe, ye, 
+                neigh_indexes, neigh_indexes_aux):
+    """
+    Fast evaluation of the Gaussian Mixture
+
+    w     : 1D np.ndarray - weight values
+    sig   : 1D np.ndarray - sigma values
+    xc    : 1D np.ndarray - x coordinate of center points
+    yc    : 1D np.ndarray - y coordinate of center points
+    xe    : 1D np.ndarray - x coordinate of eval points
+    ye    : 1D np.ndarray - y coordinate of eval points
+    neigh_indexes : 1D np.ndarray - indexes of neighbors of all eval points
+    neigh_indexes_aux : 1D np.ndarray - limit indices for neighbors of eval points in neigh_indexes
+    """
+    m = len(xe)
+    n = len(xc)
+    ret = np.zeros(m)
+    sind = 0 # start index
+    for i in range(m):
+        eind = neigh_indexes_aux[i] # end index
+        for j in neigh_indexes[sind:eind]:
+            dist2 = (xe[i]-xc[j])**2 + (ye[i]-yc[j])**2
+            ret[i] += w[j] * exp( -0.5 * dist2 / sig[j]**2 )
+        sind = eind
     return ret
 
 
@@ -195,3 +236,18 @@ def gradient(img):
     gx, gy = np.gradient(img)
     img_grad = np.sqrt(gx**2 + gy**2)
     return img_grad
+
+
+def compute_neighbors(mu_center, mu_eval, maxsig):
+    nn = NearestNeighbors(radius=maxsig, algorithm="ball_tree", n_jobs=2)
+    nn.fit(mu_center)
+    neigh_indexes_arr = nn.radius_neighbors(mu_eval, return_distance=False)
+    neigh_indexes = []
+    neigh_indexes_aux = []
+    last = 0
+    for arr in neigh_indexes_arr:
+        l = arr.tolist(); l.sort()
+        last += len(l)
+        for index in l: neigh_indexes.append(index)
+        neigh_indexes_aux.append(last)
+    return np.asarray(neigh_indexes),np.asarray(neigh_indexes_aux)  
