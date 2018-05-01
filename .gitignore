@@ -35,6 +35,7 @@ data
 *.xml
 .*.swp
 *.o
+*.so
 *.tar.gz
 *.npy
 *.pkl
