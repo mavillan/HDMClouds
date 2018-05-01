@@ -18,7 +18,7 @@ warnings.simplefilter('ignore', category=AstropyWarning)
 
 
 @numba.jit(nopython=True)
-def gm_eval(c, sig, xc, yc, xe, ye, support=5):    
+def gm_eval(c, sig, xc, yc, xe, ye):    
     """
     Fast evaluation of the Gaussian Mixture
 
@@ -35,7 +35,6 @@ def gm_eval(c, sig, xc, yc, xe, ye, support=5):
     for i in range(m):
         for j in range(n):
             dist2 = (xe[i]-xc[j])**2 + (ye[i]-yc[j])**2
-            #if  dist2 > support**2 * sig[j]**2: continue
             ret[i] += c[j] * exp( -0.5 * dist2 / sig[j]**2 )
     return ret
 
@@ -251,3 +250,24 @@ def compute_neighbors(mu_center, mu_eval, maxsig):
         for index in l: neigh_indexes.append(index)
         neigh_indexes_aux.append(last)
     return np.asarray(neigh_indexes),np.asarray(neigh_indexes_aux)  
+
+
+def compute_neighbors2(mu_center, mu_eval, maxsig):
+    nn = NearestNeighbors(radius=maxsig, algorithm="ball_tree", n_jobs=2)
+    nn.fit(mu_center)
+    neigh_indexes_arr = nn.radius_neighbors(mu_eval, return_distance=False)
+    
+    # creating the initial array
+    maxlen = 0
+    for arr in neigh_indexes_arr:
+        if len(arr)>maxlen:
+            maxlen = len(arr)
+    neigh_indexes = -1*np.ones((len(neigh_indexes_arr),maxlen), dtype=np.int64)
+    
+    # filling it with the correct indexes
+    for i,arr in enumerate(neigh_indexes_arr):
+        ll = arr.tolist(); ll.sort()
+        for j,index in enumerate(ll):
+            neigh_indexes[i,j] = index
+            
+    return neigh_indexes
