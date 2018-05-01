@@ -13,6 +13,8 @@ from points_generation import *
 from initial_guess import *
 from preprocessing import *
 from gmr import *
+from fgm_eval import gm_eval
+from fgm_eval import gm_eval_trunc_thread as gm_eval_fast
 
 
 #################################################################
