@@ -8,7 +8,7 @@ ext_modules=[
               ["fgm_eval.pyx"],
               libraries=["m"],
               extra_compile_args = ["-O3", "-ffast-math", "-march=native", "-fopenmp"],
-              extra_link_args=['-fopenmp']
+              extra_link_args=['-fopenmp', "-Wl,-rpath,/usr/local/opt/gcc/lib/gcc/7/"]
               ) 
 ]
 
