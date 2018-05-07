@@ -5,7 +5,7 @@ from cython.parallel import prange
 
 
 
-def gm_eval(double[:] c, double[:] sig, double[:] xc, double[:] yc, double[:] xe, double[:] ye):    
+def gm_eval(double[:] w, double[:] sig, double[:] xc, double[:] yc, double[:] xe, double[:] ye):    
     """
     Fast Gaussian Mixture Evaluation: No truncation
 
@@ -24,7 +24,7 @@ def gm_eval(double[:] c, double[:] sig, double[:] xc, double[:] yc, double[:] xe
     for i in range(m):
         for j in range(n):
             quad = (xe[i]-xc[j])**2 + (ye[i]-yc[j])**2
-            ret[i] += c[j] * exp( -quad/sig[j]**2 )
+            ret[i] += w[j] * exp( -quad/sig[j]**2 )
     return ret.base
 
 
