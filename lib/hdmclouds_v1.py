@@ -145,10 +145,10 @@ class HDMClouds():
         w_red,mu_red,sig_red = mixture_reduction(w, mu, sig, 2*n_center, verbose=False)
 
         # evaluation points
-        xe = mu_red[:,0]
-        ye = mu_red[:,1]
-        #xe = Xe[mask]
-        #ye = Ye[mask]
+        #xe = mu_red[:,0]
+        #ye = mu_red[:,1]
+        xe = Xe[mask]
+        ye = Ye[mask]
         points_eval = np.vstack([xe,ye]).T
 
         # agglomeration must go on
@@ -176,7 +176,9 @@ class HDMClouds():
         # Computing neighbor indexes for 
         # fast evaluation
         ########################################
-        neigh_indexes,neigh_indexes_aux = compute_neighbors(mu_red, points_eval, 5*np.max(sig_red))
+        minsig = np.min(np.abs(sig_red))
+        maxsig = 5*np.max(np.abs(sig_red))
+        neigh_indexes,neigh_indexes_aux = compute_neighbors(mu_red, points_eval, maxsig)
         self.nind1 = neigh_indexes
         self.nind_aux1 = neigh_indexes_aux
 
@@ -184,7 +186,7 @@ class HDMClouds():
         #self.nind2 = neigh_indexes
         #self.nind_aux2 = neigh_indexes_aux
 
-        neigh_indexes,neigh_indexes_aux = compute_neighbors(mu_red, points_grid, 5*np.max(sig_red))
+        neigh_indexes,neigh_indexes_aux = compute_neighbors(mu_red, points_grid, maxsig)
         self.nind3 = neigh_indexes
         self.nind_aux3 = neigh_indexes_aux
 
@@ -197,12 +199,12 @@ class HDMClouds():
         self.xb = xb; self.yb = yb
         self.xe = xe; self.ye = ye
         self.xc = xc; self.yc = yc
-        self.minsig = sig_red.min()
-        self.maxsig = 10*sig_red.max()
+        self.minsig = minsig
+        self.maxsig = maxsig
         self.w = np.sqrt(w_red)
-        self.w0 = w_red
+        self.w0 = np.copy(w_red)
         self.sig = inv_sig_mapping(sig_red, self.minsig, self.maxsig)
-        self.sig0 = sig_red
+        self.sig0 = np.copy(sig_red)
         self.d1psi1 = d1psi1
         self.alpha = alpha
         self.lamb = lamb
@@ -238,7 +240,7 @@ class HDMClouds():
         #yc = self.yc0 + self.deltay * np.sin(self.theta_yc)
         w = self.w**2
         sig = sig_mapping(self.sig, self.minsig, self.maxsig)
-        return w, sig
+        return w,sig
 
     def normalized_w(self):
         """
@@ -269,11 +271,7 @@ class HDMClouds():
 
         # visualization of residual
         if plot:
-            vext = max(np.abs(residual.min()), np.abs(residual.max()))
-            gp.image_plot(residual, cmap=plt.cm.RdBu_r,  wcs=self.wcs,
-                vmin=-vext, vmax=vext)
-            #gp.solution_plot(self.data, u, residual)
-
+            gp.solution_plot(self.data, u, residual)
         # computing residual stats
         total_flux = np.sum(self.data[self.mask])
         flux_mask = residual<0.

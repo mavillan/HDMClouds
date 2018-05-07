@@ -258,11 +258,7 @@ class HDMClouds():
 
         # visualization of residual
         if plot:
-            #vext = max(np.abs(residual.min()), np.abs(residual.max()))
-            #gp.image_plot(residual, cmap=plt.cm.RdBu_r,  wcs=self.wcs,
-            #    vmin=-vext, vmax=vext)
             gp.solution_plot(self.data, u, residual)
-
         # computing residual stats
         total_flux = np.sum(self.data[self.mask])
         flux_mask = residual<0.

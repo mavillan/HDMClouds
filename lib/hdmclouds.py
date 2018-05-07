@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 
 import graph as gp
 from utils import *
+from fgm_eval import gm_eval
 from points_generation import *
 from initial_guess import *
 from preprocessing import *
@@ -228,7 +229,7 @@ class HDMClouds():
 
     def get_residual_stats(self):
         w, xc, yc, sig = self.get_params_mapped()
-        u = u_eval(w, sig, xc, yc, self.xgrid, self.ygrid)
+        u = gm_eval(w, sig, xc, yc, self.xgrid, self.ygrid)
         u = u.reshape(self.dims)
 
         if self.mask is not None:
@@ -251,7 +252,7 @@ class HDMClouds():
 
     def get_approximation(self):
         w, xc, yc, sig = self.get_params_mapped()
-        u = u_eval(w, sig, xc, yc, self.xgrid, self.ygrid)
+        u = gm_eval(w, sig, xc, yc, self.xgrid, self.ygrid)
         u = u.reshape(self.dims)
         return u
 
@@ -326,7 +327,7 @@ class HDMClouds():
         xb = self.xb; yb = self.yb
         
         # computing the EL equation
-        u = u_eval(w, sig, xc, yc, xe, ye)
+        u = gm_eval(w, sig, xc, yc, xe, ye)
         f0 = np.hstack([ self.f0, self.dfunc(np.vstack([xc,yc]).T) ])
         alpha = self.alpha; lamb = self.lamb
 
@@ -336,7 +337,7 @@ class HDMClouds():
             
         # evaluating at boundary
         fb = self.fb
-        u_boundary = u_eval(w, sig, xc, yc, self.xb, self.yb)
+        u_boundary = gm_eval(w, sig, xc, yc, self.xb, self.yb)
         
         return np.concatenate([el,u_boundary-fb])
 
