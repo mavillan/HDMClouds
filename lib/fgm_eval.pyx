@@ -1,6 +1,6 @@
 #cython: boundscheck=False, wraparound=False, nonecheck=False, cdivision=True 
 import numpy as np
-from libc.math cimport exp
+from libc.math cimport exp, cos, sin
 from cython.parallel import prange
 
 
@@ -19,12 +19,12 @@ def gm_eval(double[:] c, double[:] sig, double[:] xc, double[:] yc, double[:] xe
     cdef int m = len(xe)
     cdef int n = len(xc)
     cdef int i,j
-    cdef double dist2
+    cdef double quad
     cdef double[:] ret = np.zeros(m)
     for i in range(m):
         for j in range(n):
-            dist2 = (xe[i]-xc[j])**2 + (ye[i]-yc[j])**2
-            ret[i] += c[j] * exp( -0.5 * dist2 / sig[j]**2 )
+            quad = (xe[i]-xc[j])**2 + (ye[i]-yc[j])**2
+            ret[i] += c[j] * exp( -quad/sig[j]**2 )
     return ret.base
 
 
@@ -44,27 +44,27 @@ def gm_eval_trunc(double[:] w, double[:] sig, double[:] xc, double[:] yc, double
     """
     cdef int m = len(xe)
     cdef int i,j,sind,eind
-    cdef double dist2
+    cdef double quad
     cdef double[:] ret = np.zeros(m)
     sind = 0 # start index
     for i in range(m):
         eind = neigh_indexes_aux[i] # end index
         for j in range(sind,eind):
             j = neigh_indexes[j]
-            dist2 = (xe[i]-xc[j])**2 + (ye[i]-yc[j])**2
-            ret[i] += w[j] * exp( -0.5 * dist2 / sig[j]**2 )
+            quad = (xe[i]-xc[j])**2 + (ye[i]-yc[j])**2
+            ret[i] += w[j] * exp( -quad/sig[j]**2 )
         sind = eind
     return ret.base
 
 
-def gm_eval_trunc_thread(double[:] c, double[:] sig, double[:] xc, double[:] yc, double[:] xe, 
+def gm_eval_trunc_thread(double[:] w, double[:] sig, double[:] xc, double[:] yc, double[:] xe, 
                    double[:] ye, long[:] neigh_indexes, long[:] neigh_indexes_aux):
     """
     Gaussian Mixture Evaluation with threads: Low memory consumption
     """ 
     cdef int m = xe.shape[0]
     cdef int i,j,sind,eind
-    cdef double dist2
+    cdef double quad
     cdef double[:] ret = np.zeros(m)
     
     for i in prange(m, nogil=True):
@@ -73,12 +73,12 @@ def gm_eval_trunc_thread(double[:] c, double[:] sig, double[:] xc, double[:] yc,
         eind = neigh_indexes_aux[i]
         for j in range(sind,eind):
             j = neigh_indexes[j]
-            dist2 = (xe[i]-xc[j])**2 + (ye[i]-yc[j])**2
-            ret[i] += c[j] * exp( -0.5 * dist2 / sig[j]**2 )
+            quad = (xe[i]-xc[j])**2 + (ye[i]-yc[j])**2
+            ret[i] += w[j] * exp( -quad/sig[j]**2 )
     return ret.base
 
 
-def gm_eval_trunc_thread2(double[:] c, double[:] sig, double[:] xc, double[:] yc, double[:] xe, 
+def gm_eval_trunc_thread2(double[:] w, double[:] sig, double[:] xc, double[:] yc, double[:] xe, 
                     double[:] ye, long[:,:] neigh_indexes):
     """
     Gaussian Mixture Evaluation with threads
@@ -86,13 +86,50 @@ def gm_eval_trunc_thread2(double[:] c, double[:] sig, double[:] xc, double[:] yc
     cdef int m = neigh_indexes.shape[0]
     cdef int n = neigh_indexes.shape[1]
     cdef int i,j
-    cdef double dist2 = 0
+    cdef double quad = 0
     cdef double[:] ret = np.zeros(m)
     
     for i in prange(m, nogil=True):
         for j in range(n):
             j = neigh_indexes[i,j]
             if j==-1: break
-            dist2 = (xe[i]-xc[j])**2 + (ye[i]-yc[j])**2 
-            ret[i] += c[j] * exp( -0.5 * dist2 / sig[j]**2 )
+            quad = (xe[i]-xc[j])**2 + (ye[i]-yc[j])**2 
+            ret[i] += w[j] * exp( -quad/sig[j]**2 )
+    return ret.base
+
+
+def gm_eval_full(double[:] w, double[:,:] sig, double[:] xc, double[:] yc, double[:] xe, double[:] ye):
+    """
+    Gaussian Mixture Evaluation with full Sigma
+    """
+    cdef int m = len(xe)
+    cdef int n = len(xc)
+    cdef int i,j
+    cdef double quad
+    cdef double[:] ret = np.zeros(m)
+    for i in range(m):
+        for j in range(n):
+            quad = sig[j,2]*(xe[i]-xc[j])**2 - 2*sig[j,1]*(xe[i]-xc[j])*(ye[i]-yc[j]) + sig[j,0]*(ye[i]-yc[j])**2
+            det = sig[j,0]*sig[j,2]-sig[j,1]**2
+            ret[i] += w[j]*exp(-quad/det)
+    return ret.base
+
+
+def gm_eval_full2(double[:] w, double[:,:] sig, double[:] theta, double[:] xc, double[:] yc, 
+                  double[:] xe, double[:] ye):
+    """
+    Gaussian Mixture Evaluation with full Sigma
+    """
+    cdef int m = len(xe)
+    cdef int n = len(xc)
+    cdef int i,j
+    cdef double a,b,c,quad
+    cdef double[:] ret = np.zeros(m)
+    for i in range(m):
+        for j in range(n):
+            a = cos(theta[j])**2/sig[j,0]**2 + sin(theta[j])**2/sig[j,1]**2
+            b = -sin(2*theta[j])/sig[j,0]**2 + sin(2*theta[j])/sig[j,1]**2
+            c = sin(theta[j])**2/sig[j,0]**2 + cos(theta[j])**2/sig[j,1]**2
+            quad = a*(xe[i]-xc[j])**2 + b*(xe[i]-xc[j])*(ye[i]-yc[j]) + c*(ye[i]-yc[j])**2
+            ret[i] += w[j]*exp(-quad)
     return ret.base
