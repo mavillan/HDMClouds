@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from fgm_eval import gm_eval
+from fgm_eval  import gm_eval
 from utils3D import u_eval as u_eval3D
 from utils3D import compute_solution
 from gmr import isd_diss_full
@@ -146,7 +146,8 @@ def solution_plot(data, u, res, title=None, cmap=plt.cm.cubehelix):
     # residual plot
     plt.subplot(1,3,3)
     ax = plt.gca()
-    im = ax.imshow(res, vmin=res.min(), vmax=res.max(), cmap=plt.cm.RdBu_r)
+    vext = max(np.abs(res.min()), np.abs(res.max()))
+    im = ax.imshow(res, vmin=-vext, vmax=vext, cmap=plt.cm.RdBu_r)
     plt.title('Residual')
     plt.axis('off')
     ax.invert_yaxis()
