@@ -1,9 +1,8 @@
-notebooks/.ipynb_checkpoints
-notebooks/paper_figures/.ipynb_checkpoints
 notebooks_attic/
 results/
 build
 data
+.ipynb_checkpoints/
 
 
 # trash files
