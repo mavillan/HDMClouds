@@ -134,15 +134,19 @@ def load_data(fits_path):
 
 
 def sig_mapping(sig, minsig=0., maxsig=1.):
-    return np.sqrt( (maxsig**2-minsig**2)*np.tanh(sig**2) + minsig**2 )
+    return  (maxsig-minsig)*((np.tanh(sig)+1)/2) + minsig
 
+def theta_mapping(theta, theta_lim=np.pi):
+    return theta_lim*np.tanh(theta)
 
-def _inv_tanh(x):
+def inv_tanh(x):
     return 0.5*np.log((1+x)/(1-x))
 
-
 def inv_sig_mapping(sig, minsig=0., maxsig=1.):
-    return np.sqrt( _inv_tanh((sig**2-minsig**2)/(maxsig**2-minsig**2)) )
+    return inv_tanh( (2*(sig-minsig)/(maxsig-minsig))-1 )
+
+def inv_theta_mapping(theta, theta_lim=np.pi):
+    return inv_tanh(theta/theta_lim)
 
 
 def mean_min_dist(points1, points2):
@@ -199,3 +203,39 @@ def compute_neighbors2(mu_center, mu_eval, maxsig):
             neigh_indexes[i,j] = index
             
     return neigh_indexes
+
+
+@numba.jit('float64 (float64[:,:])', nopython=True)
+def det(X):
+    """
+    Direct computation of determinant for 
+    matrices of size 2x2 and 3x3
+    """
+    n = X.shape[0]
+    if n==2:
+        return X[0,0]*X[1,1] - X[0,1]*X[1,0]
+    else:
+        return X[0,0] * (X[1,1] * X[2,2] - X[2,1] * X[1,2]) - \
+               X[1,0] * (X[0,1] * X[2,2] - X[2,1] * X[0,2]) + \
+               X[2,0] * (X[0,1] * X[1,2] - X[1,1] * X[0,2])
+            
+
+
+@numba.jit('float64[:,:] (float64[:,:])', nopython=True)
+def inv(X):
+    """
+    Direct computation of inverse for 
+    matrices of size 2x2 and 3x3
+    """
+    n = X.shape[0]
+    if n==2:
+        ret = np.empty((2,2))
+        ret[0,0] = X[1,1]; ret[0,1] = -X[0,1]
+        ret[1,0] = -X[1,0]; ret[1,1] = X[0,0]
+        return 1./det(X) * ret
+    else:
+        ret = np.empty((3,3))
+        ret[0,0]=X[2,2]*X[1,1]-X[2,1]*X[1,2]; ret[0,1]=-X[2,2]*X[0,1]+X[2,1]*X[0,2]; ret[0,2]=X[1,2]*X[0,1]-X[1,1]*X[0,2]
+        ret[1,0]=-X[2,2]*X[1,0]+X[2,0]*X[1,2]; ret[1,1]=X[2,2]*X[0,0]-X[2,0]*X[0,2]; ret[1,2]=-X[1,2]*X[0,0]+X[1,0]*X[0,2]
+        ret[2,0]=X[2,1]*X[1,0]-X[2,0]*X[1,1]; ret[2,1]=-X[2,1]*X[0,0]+X[2,0]*X[0,1]; ret[2,2]=X[1,1]*X[0,0]-X[1,0]*X[0,1]
+        return 1./det(X) * ret
