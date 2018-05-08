@@ -9,7 +9,7 @@ import platform
 if "Linux" in platform.platform():
     extra_link_args = ['-fopenmp']
 else:
-    extra_link_args = ['-fopenmp', "-Wl,-rpath,/usr/local/opt/gcc/lib/gcc/7/"]
+    extra_link_args = ['-fopenmp', "-Wl,-rpath,/usr/local/opt/gcc/lib/gcc/8/"]
 
 
 ext_modules=[
