@@ -98,7 +98,7 @@ def gm_eval_trunc_thread2(double[:] w, double[:] sig, double[:] xc, double[:] yc
     return ret.base
 
 
-def gm_eval_full(double[:] w, double[:,:] sig, double[:] xc, double[:] yc, double[:] xe, double[:] ye):
+def gm_eval_full_(double[:] w, double[:,:] sig, double[:] xc, double[:] yc, double[:] xe, double[:] ye):
     """
     Gaussian Mixture Evaluation with full Sigma
     """
@@ -115,7 +115,7 @@ def gm_eval_full(double[:] w, double[:,:] sig, double[:] xc, double[:] yc, doubl
     return ret.base
 
 
-def gm_eval_full2(double[:] w, double[:,:] sig, double[:] theta, double[:] xc, double[:] yc, 
+def gm_eval_full(double[:] w, double[:,:] sig, double[:] theta, double[:] xc, double[:] yc, 
                   double[:] xe, double[:] ye):
     """
     Gaussian Mixture Evaluation with full Sigma
@@ -127,6 +127,29 @@ def gm_eval_full2(double[:] w, double[:,:] sig, double[:] theta, double[:] xc, d
     cdef double[:] ret = np.zeros(m)
     for i in range(m):
         for j in range(n):
+            a = cos(theta[j])**2/sig[j,0]**2 + sin(theta[j])**2/sig[j,1]**2
+            b = -sin(2*theta[j])/sig[j,0]**2 + sin(2*theta[j])/sig[j,1]**2
+            c = sin(theta[j])**2/sig[j,0]**2 + cos(theta[j])**2/sig[j,1]**2
+            quad = a*(xe[i]-xc[j])**2 + b*(xe[i]-xc[j])*(ye[i]-yc[j]) + c*(ye[i]-yc[j])**2
+            ret[i] += w[j]*exp(-quad)
+    return ret.base
+
+
+def gm_eval_full_thread(double[:] w, double[:,:] sig, double[:] theta, double[:] xc, double[:] yc, 
+                  double[:] xe, double[:] ye, long[:] neigh_indexes, long[:] neigh_indexes_aux):
+    """
+    Gaussian Mixture Evaluation with full Sigma: Multithreading version 
+    """
+    cdef int m = len(xe)
+    cdef int i,j,sind,eind
+    cdef double a,b,c,quad
+    cdef double[:] ret = np.zeros(m)
+    for i in prange(m, nogil=True):
+        if i==0: sind=0
+        else: sind = neigh_indexes_aux[i-1]
+        eind = neigh_indexes_aux[i]
+        for j in range(sind,eind):
+            j = neigh_indexes[j]
             a = cos(theta[j])**2/sig[j,0]**2 + sin(theta[j])**2/sig[j,1]**2
             b = -sin(2*theta[j])/sig[j,0]**2 + sin(2*theta[j])/sig[j,1]**2
             c = sin(theta[j])**2/sig[j,0]**2 + cos(theta[j])**2/sig[j,1]**2
