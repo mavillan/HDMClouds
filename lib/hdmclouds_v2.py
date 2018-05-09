@@ -14,7 +14,8 @@ from initial_guess import *
 from preprocessing import *
 from gmr import *
 
-from fgm_eval import gm_eval, gm_eval_full, gm_eval_full2
+from fgm_eval import gm_eval, gm_eval_full
+from fgm_eval import gm_eval_full_thread as gm_eval_full_fast
 
 
 #################################################################
@@ -108,6 +109,7 @@ class HDMClouds():
         xgrid = Xe.ravel(); ygrid = Ye.ravel()
         self.xgrid = xgrid
         self.ygrid = ygrid
+        points_grid = np.vstack([xgrid,ygrid]).T
 
 
         #######################################
@@ -119,6 +121,7 @@ class HDMClouds():
         # right format
         xb = boundary_points[:,0]
         yb = boundary_points[:,1]
+        points_bound = np.vstack([xb,yb]).T
 
         #######################################
         # Estimating initial guess
@@ -147,9 +150,7 @@ class HDMClouds():
         #ye = mu_red[:,1]
         xe = Xe[mask]
         ye = Ye[mask]
-
-        # agglomeration must go on
-        #w_red,mu_red,sig_red = mixture_reduction(w_red, mu_red, sig_red, n_center, verbose=False)
+        points_eval = np.vstack([xe,ye]).T
 
         # gaussian center points
         xc = mu_red[:,0]
@@ -173,6 +174,26 @@ class HDMClouds():
             collocation_points = np.vstack([xe,ye]).T
             gp.points_plot(data, points=center_points, color="red", wcs=wcs)
             gp.points_plot(data, points=collocation_points, color="blue", wcs=wcs)
+            
+        
+        ########################################
+        # Computing neighbor indexes for 
+        # fast evaluation
+        ########################################
+        minsig = np.min(np.abs(sig))
+        maxsig = 3*np.max(np.abs(sig))
+        epsilon = 1e-6 # little shift to avoid NaNs in inv_sig_mapping
+        neigh_indexes,neigh_indexes_aux = compute_neighbors(mu_red, points_eval, 5*maxsig)
+        self.nind1 = neigh_indexes
+        self.nind_aux1 = neigh_indexes_aux
+
+        #neigh_indexes,neigh_indexes_aux = compute_neighbors(mu_red, points_bound, 5*np.max(sig_red))
+        #self.nind2 = neigh_indexes
+        #self.nind_aux2 = neigh_indexes_aux
+
+        neigh_indexes,neigh_indexes_aux = compute_neighbors(mu_red, points_grid, 5*maxsig)
+        self.nind3 = neigh_indexes
+        self.nind_aux3 = neigh_indexes_aux
 
 
         ########################################
@@ -183,20 +204,23 @@ class HDMClouds():
         self.xb = xb; self.yb = yb
         self.xe = xe; self.ye = ye
         self.xc = xc; self.yc = yc
-        self.minsig = 0.5*sig.min()
-        self.maxsig = 5*sig.max()
+        self.minsig = minsig
+        self.maxsig = maxsig
+        ###########################
         # optimization parameters
         self.w = np.sqrt(w_red)
         self.w0 = np.copy(w_red)
-        self.sig = inv_sig_mapping(sig, self.minsig, self.maxsig)
+        self.sig = inv_sig_mapping(sig+epsilon, minsig, maxsig)
         self.sig0 = np.copy(sig)
         self.theta = np.zeros(n_center)
         self.theta0 = np.zeros(n_center)
+        ###########################
         self.d1psi1 = d1psi1
         self.alpha = alpha
         self.lamb = lamb
         self.back_level = back_level
         self.scipy_sol = None
+        self.scipy_tol = None
         self.elapsed_time = None
         self.residual_stats = None
 
@@ -249,7 +273,7 @@ class HDMClouds():
     def get_approximation(self):
         w,sig,theta = self.get_params_mapped()
         sig = sig.reshape((-1,2))
-        u = gm_eval_full2(w, sig, theta, self.xc, self.yc, self.xgrid, self.ygrid)
+        u = gm_eval_full_fast(w, sig, theta, self.xc, self.yc, self.xgrid, self.ygrid, self.nind3, self.nind_aux3)
         u = u.reshape(self.dims)
         return u
 
@@ -277,6 +301,7 @@ class HDMClouds():
 
         print("RESIDUAL STATS")
         print("RMS of residual: {0}".format(out[0]))
+        print("Inf norm of residual: {0}".format(np.max(np.abs(residual))))
         print("Variance of residual: {0}".format(out[1]))
         print("Normalized flux addition: {0}".format(out[2]))
         print("Normalized flux lost: {0}".format(out[3]))
@@ -304,6 +329,8 @@ class HDMClouds():
             print('status: {0}'.format(self.scipy_sol['status']))
             print('message: {0}'.format(self.scipy_sol['message']))
             print('nfev: {0}'.format(self.scipy_sol['nfev']))
+            print("xtol: {0}".format(self.scipy_tol))
+            print("ftol: {0}".format(self.scipy_tol))
 
 
     
@@ -342,7 +369,7 @@ class HDMClouds():
         theta = theta_mapping(params[3*N:]) 
         
         # computing the EL equation
-        u = gm_eval_full2(w, sig, theta, self.xc, self.yc, self.xe, self.ye)
+        u = gm_eval_full_fast(w, sig, theta, self.xc, self.yc, self.xe, self.ye, self.nind1, self.nind_aux1)
 
         # evaluation of the el equation
         f0 = self.f0
@@ -353,12 +380,12 @@ class HDMClouds():
             
         # evaluating at the boundary
         fb = self.fb
-        u_boundary = gm_eval_full2(w, sig, theta, self.xc, self.yc, self.xb, self.yb)
+        u_boundary = gm_eval_full(w, sig, theta, self.xc, self.yc, self.xb, self.yb)
         
         return np.concatenate([el,u_boundary-fb])
 
 
-    def build_gmr(self, max_nfev=None, verbose=True, xtol=1.e-7, ftol=1.e-7):
+    def build_gmr(self, max_nfev=None, verbose=True, tol=1.e-7):
         """
         Build the Gaussian Mixture Representation for the
         input data
@@ -371,13 +398,12 @@ class HDMClouds():
         #options = {'maxiter':max_nfev, 'xtol':xtol, 'ftol':ftol}
         #sol = sp.optimize.root(self.F, self.get_params(), method='lm', options=options)
         while True:
-            options = {'xtol':xtol, 'ftol':ftol}
+            options = {'xtol':tol, 'ftol':tol}
             sol = sp.optimize.root(self.F, self.get_params(), method='lm', options=options)
-            if sol["status"]!=2: 
-                print("xtol: {0}".format(xtol))
-                print("ftol: {0}".format(ftol))
+            if sol["status"]!=2:
+                self.scipy_tol = tol
                 break
-            xtol /= 10; ftol /=10
+            tol /= 10
         sol_length = len(sol.x)//4
         opt_w = sol.x[0:sol_length]
         opt_sig = sol.x[sol_length:3*sol_length]

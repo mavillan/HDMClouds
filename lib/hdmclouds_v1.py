@@ -53,7 +53,7 @@ def d1psi1(x, lamb=1.):
 # HDMClouds class definition
 #################################################################
 class HDMClouds():
-    def __init__(self, data, alpha=0., lamb=1., n_center=200, back_level=None, ig_method="determinant",
+    def __init__(self, data, alpha=0., lamb=1., n_center=200, back_level=None, ig_method="eigenvalue",
         minsig=None, maxsig=None, pix_freedom=1., verbose=False, wcs=None):
 
         #############################################################
@@ -177,8 +177,9 @@ class HDMClouds():
         # fast evaluation
         ########################################
         minsig = np.min(np.abs(sig_red))
-        maxsig = 5*np.max(np.abs(sig_red))
-        neigh_indexes,neigh_indexes_aux = compute_neighbors(mu_red, points_eval, maxsig)
+        maxsig = 3*np.max(np.abs(sig_red))
+        epsilon = 1e-6 # little shift to avoid NaNs in inv_sig_mapping
+        neigh_indexes,neigh_indexes_aux = compute_neighbors(mu_red, points_eval, 5*maxsig)
         self.nind1 = neigh_indexes
         self.nind_aux1 = neigh_indexes_aux
 
@@ -186,7 +187,7 @@ class HDMClouds():
         #self.nind2 = neigh_indexes
         #self.nind_aux2 = neigh_indexes_aux
 
-        neigh_indexes,neigh_indexes_aux = compute_neighbors(mu_red, points_grid, maxsig)
+        neigh_indexes,neigh_indexes_aux = compute_neighbors(mu_red, points_grid, 5*maxsig)
         self.nind3 = neigh_indexes
         self.nind_aux3 = neigh_indexes_aux
 
@@ -201,15 +202,19 @@ class HDMClouds():
         self.xc = xc; self.yc = yc
         self.minsig = minsig
         self.maxsig = maxsig
+        ##########################
+        # optimization parameters
         self.w = np.sqrt(w_red)
         self.w0 = np.copy(w_red)
-        self.sig = inv_sig_mapping(sig_red, self.minsig, self.maxsig)
+        self.sig = inv_sig_mapping(sig_red+epsilon, minsig, maxsig)
         self.sig0 = np.copy(sig_red)
+        ##########################
         self.d1psi1 = d1psi1
         self.alpha = alpha
         self.lamb = lamb
         self.back_level = back_level
         self.scipy_sol = None
+        self.scipy_tol = None
         self.elapsed_time = None
         self.residual_stats = None
 
@@ -281,10 +286,11 @@ class HDMClouds():
         # output residuals
         out = (estimate_rms(residual), estimate_variance(residual), \
                flux_addition/total_flux, flux_lost/total_flux)
-
+        
 
         print("RESIDUAL STATS")
         print("RMS of residual: {0}".format(out[0]))
+        print("Inf norm of residual: {0}".format(np.max(np.abs(residual))))
         print("Variance of residual: {0}".format(out[1]))
         print("Normalized flux addition: {0}".format(out[2]))
         print("Normalized flux lost: {0}".format(out[3]))
@@ -312,8 +318,9 @@ class HDMClouds():
             print('status: {0}'.format(self.scipy_sol['status']))
             print('message: {0}'.format(self.scipy_sol['message']))
             print('nfev: {0}'.format(self.scipy_sol['nfev']))
-
-
+            print("xtol: {0}".format(self.scipy_tol))
+            print("ftol: {0}".format(self.scipy_tol))
+            
     
     def summarize(self, solver_output=True, residual_stats=True, solution_plot=True,
                   params_plot=True, histograms_plot=True):
@@ -366,7 +373,7 @@ class HDMClouds():
         return np.concatenate([el,u_boundary-fb])
 
 
-    def build_gmr(self, max_nfev=None, verbose=True, xtol=1.e-7, ftol=1.e-7):
+    def build_gmr(self, max_nfev=None, verbose=True, tol=1.e-7):
         """
         Build the Gaussian Mixture Representation for the
         input data
@@ -379,13 +386,12 @@ class HDMClouds():
         #options = {'maxiter':max_nfev, 'xtol':xtol, 'ftol':ftol}
         #sol = sp.optimize.root(self.F, self.get_params(), method='lm', options=options)
         while True:
-            options = {'xtol':xtol, 'ftol':ftol}
+            options = {'xtol':tol, 'ftol':tol}
             sol = sp.optimize.root(self.F, self.get_params(), method='lm', options=options)
             if sol["status"]!=2: 
-                print("xtol: {0}".format(xtol))
-                print("ftol: {0}".format(ftol))
+                self.scipy_tol = tol
                 break
-            xtol /= 10; ftol /=10
+            tol /= 10
         sol_length = len(sol.x)//2
         opt_w = sol.x[0:sol_length]
         opt_sig = sol.x[sol_length:]
