@@ -1,12 +1,20 @@
 import numpy as np
+
+# ignoring annoying/unuseful warnings
+import warnings
+import matplotlib.cbook
+warnings.filterwarnings("ignore",category=matplotlib.cbook.mplDeprecation)
+
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+
 from fgm_eval  import gm_eval
 from utils3D import u_eval as u_eval3D
 from utils3D import compute_solution
 from gmr import isd_diss_full
 from points_generation import boundary_map_caa
+
 from astropy.visualization import AsymmetricPercentileInterval
 import astropy.units as u
 
