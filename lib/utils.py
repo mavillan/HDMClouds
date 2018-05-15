@@ -14,6 +14,9 @@ from astropy.wcs import WCS
 from astropy.utils.exceptions import AstropyWarning
 warnings.simplefilter('ignore', category=AstropyWarning)
 
+# max int32 value
+ii32 = np.iinfo(np.int32)
+INAN = ii32.max
 
 
 def estimate_rms(data):
@@ -194,7 +197,7 @@ def compute_neighbors2(mu_center, mu_eval, maxsig):
     for arr in neigh_indexes_arr:
         if len(arr)>maxlen:
             maxlen = len(arr)
-    neigh_indexes = -1*np.ones((len(neigh_indexes_arr),maxlen), dtype=np.int64)
+    neigh_indexes = INAN*np.ones((len(neigh_indexes_arr),maxlen), dtype=np.int32)
     
     # filling it with the correct indexes
     for i,arr in enumerate(neigh_indexes_arr):
@@ -202,7 +205,7 @@ def compute_neighbors2(mu_center, mu_eval, maxsig):
         for j,index in enumerate(ll):
             neigh_indexes[i,j] = index
             
-    return neigh_indexes
+    return nn,neigh_indexes
 
 
 @numba.jit('float64 (float64[:,:])', nopython=True)
