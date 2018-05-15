@@ -8,19 +8,22 @@ from astropy.visualization import AsymmetricPercentileInterval
 
 from utils import estimate_rms
 
+import warnings
+warnings.filterwarnings("ignore", message="Only one label was provided to `remove_small_objects`.")
+
 umap = {'RA':'RA (J2000)', 'DEC':'Dec (J2000)',
         'GLON':'Galactic Longitude', 'GLAT':'Galactic Latitude'}
         
 
 def compute_mask(data, back_level, min_obj_size=20, min_hole_size=10):
     # thresholding
-    mask = data >= back_level
+    mask = data>=back_level
     # structuring elements
     disk1 = disk(1)
     square2 = square(2)
     # cleaning
     mask = binary_opening(mask, selem=disk1)
-    mask = remove_small_objects(mask, min_size=min_obj_size)
+    mask = remove_small_objects(mask.astype(bool), min_size=min_obj_size)
     mask = binary_closing(mask, selem=square2)
     mask = remove_small_holes(mask, min_size=min_hole_size)
     return mask
