@@ -1,7 +1,12 @@
 import copy
 import numba
+from numba import prange
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
+from utils import compute_neighbors2
+
+ii32 = np.iinfo(np.int32)
+INAN = ii32.max
 
 ################################################################
 # HELPER FUNCTIONS
@@ -277,6 +282,8 @@ def kl_diss(w1, mu1, sig1, w2, mu2, sig2):
 #     return c,mu,sig
 
 
+
+
 def gaussian_reduction(c, mu, sig, n_comp, metric=kl_diss, verbose=True):
     """
     Gaussian Mixture Reduction Through KL-upper bound approach
@@ -329,22 +336,72 @@ def gaussian_reduction(c, mu, sig, n_comp, metric=kl_diss, verbose=True):
     # return c,mu,sig
 
 
-def update_nn_indexes(nn_indexes, ind1, ind2, indm):
-    for ll in nn_indexes.values():
-        flag = False
-        if ind1 in ll: 
-            ll.remove(ind1)
-            flag = True
-        if ind2 in ll:
-            ll.remove(ind2)
-            flag = True
-        if flag:
-            ll.append(indm)
+@numba.jit(nopython=True)
+def least_dissimilar(c, mu, sig, indexes, nn_indexes):
+    diss_min = np.inf
+    for i in range(len(indexes)):
+        i = indexes[i]
+        for j in nn_indexes[i]:
+            if j==INAN: break
+            if j==i: continue
+            diss = kl_diss(c[i], mu[i], sig[i], c[j], mu[j], sig[j])
+            if diss < diss_min: 
+                i_min = i; j_min = j
+                diss_min = diss
+    return i_min, j_min
 
 
-def radius_search(nn, mu, deleted):
-    ss = set(nn.radius_neighbors([mu], return_distance=False)[0])
-    return list(ss-deleted)
+
+def radius_search(nn, mu, max_neigh, merge_mapping):
+    neigh_arr = nn.radius_neighbors([mu], return_distance=False)[0]
+    for i in range(len(neigh_arr)):
+        neigh_arr[i] = merge_mapping[neigh_arr[i]]
+    neigh_arr = np.unique(neigh_arr)
+    if len(neigh_arr)>max_neigh:
+        neigh_arr = nn.kneighbors([mu], n_neighbors=max_neigh, return_distance=False)[0]
+        for i in range(len(neigh_arr)):
+            neigh_arr[i] = merge_mapping[neigh_arr[i]]
+        neigh_arr = np.unique(neigh_arr)
+    ret = INAN*np.ones(max_neigh, dtype=np.int32)
+    ret[0:len(neigh_arr)] = neigh_arr
+    return ret
+
+
+@numba.jit(nopython=True)
+def update_nn_indexes(nn_indexes, indexes, nindex, dindex):
+    m,n = nn_indexes.shape
+    for i in indexes:
+        flag1 = False
+        flag2 = False
+        for k in range(n):
+            ind = nn_indexes[i,k]
+            if ind==INAN : break
+            if ind==nindex: flag1 = True
+            if ind==dindex and flag1:
+                nn_indexes[i,k] = INAN
+                flag2 = True
+                break
+            if ind==dindex and not flag1:
+                nn_indexes[i,k] = nindex
+                flag2 = True
+                break
+        if flag2:
+            nn_indexes[i,:] = np.sort(nn_indexes[i,:])
+
+@numba.jit(nopython=True)
+def update_merge_mapping(merge_mapping, nindex, dindex):
+    n = len(merge_mapping)
+    for i in range(n):
+        if merge_mapping[i]==dindex:
+            merge_mapping[i] = nindex
+
+
+@numba.jit(nopython=True)
+def get_index(array, value):
+    n = len(array)
+    for i in range(n):
+        if array[i]==value: return i
+    return -1
 
 
 def mixture_reduction(c, mu, sig, n_comp, metric=kl_diss, isomorphic=False, verbose=True):
@@ -352,64 +409,47 @@ def mixture_reduction(c, mu, sig, n_comp, metric=kl_diss, isomorphic=False, verb
     Gaussian Mixture Reduction Through KL-upper bound approach
     """
 
-    # We consider neighbors at a radius equivalent to the lenght of 5 pixels
-    if sig.ndim==1:
-        nn = NearestNeighbors(radius=5*np.max(sig), algorithm="ball_tree", n_jobs=2)
-    else:
-        nn = NearestNeighbors(radius=5*np.max(sig)**(1./2), algorithm="ball_tree", n_jobs=2)
-    nn.fit(mu)
-    nn_indexes = dict()
-    for i,arr in enumerate(nn.radius_neighbors(mu, return_distance=False)):
-        ll = list(arr); ll.remove(i); ll.sort()
-        nn_indexes[i] = ll
-
-    # cast to list
+    # original size of the mixture
+    M = len(c) 
+    # target size of the mixture
+    N = n_comp
+    # dimensionality of data
     d = mu.shape[1]
-    c = {i:val for i,val in enumerate(c)} 
-    mu = {i:val for i,val in enumerate(mu)}
+
+    # we consider neighbors at a radius equivalent to the lenght of 5 pixels
     if sig.ndim==1:
-        sig = {i:(val**2)*np.identity(d) for i,val in enumerate(sig)}
+        maxsig = 3*np.max(sig)
+        # if sig is 1-dimensional we convert it to its covariance matrix form
+        sig = np.asarray( [(val**2)*np.identity(d) for val in sig] )
     else:
-        sig = {i:cov for i,cov in enumerate(sig)}
+        maxsig = 3*max([np.max(np.linalg.eig(cov)[0])**(1./2) for cov in sig])
 
+    indexes = np.arange(M, dtype=np.int32)
+    nn,nn_indexes = compute_neighbors2(mu,mu,maxsig)
 
-    # components indexes
-    nindex = len(c)
-    deleted = set()
+    # idea: keep track that i-th component is merged into merged[i]-th
+    merge_mapping = np.arange(M, dtype=np.int32)
 
+    # max number of neighbors
+    max_neigh = nn_indexes.shape[1]
+    
     # main loop
-    while len(nn_indexes)>n_comp:
-        diss_min = np.inf
-        for i in nn_indexes:
-            for j in nn_indexes[i]:
-                diss = metric(c[i], mu[i], sig[i], c[j], mu[j], sig[j])
-                if diss < diss_min: 
-                    i_min = i; j_min = j
-                    diss_min = diss
-        # compute the moment preserving  merged gaussian
-        if not isomorphic:
-            w_m, mu_m, sig_m = merge(c[i_min], mu[i_min], sig[i_min], 
-                                     c[j_min], mu[j_min], sig[j_min])
-        else:
-            w_m, mu_m, sig_m = isomorphic_merge(c[i_min], mu[i_min], sig[i_min], 
-                                                c[j_min], mu[j_min], sig[j_min])
-        
-        if verbose:
-            ISD_diss = isd_diss(c[i_min], mu[i_min], sig[i_min], c[j_min], mu[j_min], sig[j_min])
-            print('Merged components {0} and {1} with {2} KL dist and {3} ISD dist'.format(i_min, j_min, diss_min, ISD_diss))
+    while M>N:
+        i_min, j_min = least_dissimilar(c, mu, sig, indexes, nn_indexes)
+        w_m, mu_m, sig_m = merge(c[i_min], mu[i_min], sig[i_min], 
+                                 c[j_min], mu[j_min], sig[j_min])
+        if verbose: print('Merged components {0} and {1}'.format(i_min, j_min))   
+        # updating structures
+        nindex = min(i_min,j_min) # index of new component
+        dindex = max(i_min,j_min) # index of del component
+        c[nindex] = w_m; mu[nindex] = mu_m; sig[nindex] = sig_m
+        indexes = np.delete(indexes, get_index(indexes,dindex))
+        update_merge_mapping(merge_mapping, nindex, dindex)
+        nn_indexes[nindex] = radius_search(nn, mu_m, max_neigh, merge_mapping)
+        update_nn_indexes(nn_indexes, indexes, nindex, dindex)
+        M -= 1
 
-        # updating structures        
-        del c[i_min]; del c[j_min]; c[nindex] = w_m
-        del mu[i_min]; del mu[j_min]; mu[nindex] = mu_m
-        del sig[i_min]; del sig[j_min]; sig[nindex] = sig_m
-        deleted.add(i_min); deleted.add(j_min)
-
-        # Nearest neighbors for new merged gaussian
-        del nn_indexes[i_min]; del nn_indexes[j_min]
-        update_nn_indexes(nn_indexes, i_min, j_min, nindex)
-        nn_indexes[nindex] = radius_search(nn, mu_m, deleted)
-        nindex += 1
-
-    return np.asarray(list(c.values())), np.asarray(list(mu.values())), np.asarray(list(sig.values()))
+    # indexes of "alive" mixture components
+    return c[indexes],mu[indexes],sig[indexes]
 
 
