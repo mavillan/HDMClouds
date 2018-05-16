@@ -96,6 +96,14 @@ class HDMClouds():
         self.vmax = vmax
         self.dfunc = dfunc
         self.wcs = wcs
+        
+        # Verification of consistency between n_center and number of significant emission pixels
+        npix = np.sum(mask)
+        if 4*n_center > npix:
+            n_center = npix//4
+            print("[WARNING] The number of evaluation points (4*n_center) cannot"
+                  "be greater than the number of significant emission pixels: {0}".format(npix))
+            print("[WARNING] n_center was set to: {0}".format(n_center))
 
         #######################################
         # Evaluation regular-grid points
@@ -142,18 +150,20 @@ class HDMClouds():
         w *= data.max()/u.max()
 
         # agglomeration
-        w_red,mu_red,sig_red = mixture_reduction(w, mu, sig, n_center, verbose=False)
+        w_red,mu_red,sig_red = mixture_reduction(w, mu, sig, 4*n_center, verbose=False)
 
         # evaluation points
-        #xe = mu_red[:,0]
-        #ye = mu_red[:,1]
-        xe = Xe[mask]
-        ye = Ye[mask]
-        points_eval = np.vstack([xe,ye]).T
+        xe = mu_red[:,0]
+        ye = mu_red[:,1]
+        eval_points = np.vstack([xe,ye]).T
+        
+        # agglomeration must go on
+        w_red,mu_red,sig_red = mixture_reduction(w_red, mu_red, sig_red, n_center, verbose=False)
 
         # gaussian center points
         xc = mu_red[:,0]
         yc = mu_red[:,1]
+        center_points = np.vstack([xc,yc]).T
 
         # Extracting sigx, sigy and theta from covariances
         sig = []
@@ -168,10 +178,8 @@ class HDMClouds():
 
         if verbose:
             # visualizing the choosen points
-            center_points = np.vstack([xc,yc]).T
-            collocation_points = np.vstack([xe,ye]).T
             gp.points_plot(data, points=center_points, color="red", wcs=wcs)
-            gp.points_plot(data, points=collocation_points, color="blue", wcs=wcs)
+            gp.points_plot(data, points=eval_points, color="blue", wcs=wcs)
             
         
         ########################################
@@ -181,7 +189,7 @@ class HDMClouds():
         minsig = np.min(np.abs(sig))
         maxsig = 3*np.max(np.abs(sig))
         epsilon = 1e-6 # little shift to avoid NaNs in inv_sig_mapping
-        neigh_indexes,neigh_indexes_aux = compute_neighbors(mu_red, points_eval, 5*maxsig)
+        neigh_indexes,neigh_indexes_aux = compute_neighbors(mu_red, eval_points, 5*maxsig)
         self.nind1 = neigh_indexes
         self.nind_aux1 = neigh_indexes_aux
 
