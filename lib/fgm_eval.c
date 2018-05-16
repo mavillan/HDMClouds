@@ -4384,7 +4384,7 @@ static PyObject *__pyx_pf_8fgm_eval_10gm_eval_full(CYTHON_UNUSED PyObject *__pyx
 
 /* Python wrapper */
 static PyObject *__pyx_pw_8fgm_eval_13gm_eval_full_thread(PyObject *__pyx_self, PyObject *__pyx_args, PyObject *__pyx_kwds); /*proto*/
-static char __pyx_doc_8fgm_eval_12gm_eval_full_thread[] = "\n    Gaussian Mixture Evaluation with full Sigma: Multi-threading version \n    ";
+static char __pyx_doc_8fgm_eval_12gm_eval_full_thread[] = "\n    Gaussian Mixture Evaluation with full Sigma: Multithreading version \n    ";
 static PyMethodDef __pyx_mdef_8fgm_eval_13gm_eval_full_thread = {"gm_eval_full_thread", (PyCFunction)__pyx_pw_8fgm_eval_13gm_eval_full_thread, METH_VARARGS|METH_KEYWORDS, __pyx_doc_8fgm_eval_12gm_eval_full_thread};
 static PyObject *__pyx_pw_8fgm_eval_13gm_eval_full_thread(PyObject *__pyx_self, PyObject *__pyx_args, PyObject *__pyx_kwds) {
   __Pyx_memviewslice __pyx_v_w = { 0, 0, { 0 }, { 0 }, { 0 } };
@@ -4583,7 +4583,7 @@ static PyObject *__pyx_pf_8fgm_eval_12gm_eval_full_thread(CYTHON_UNUSED PyObject
   __Pyx_RefNannySetupContext("gm_eval_full_thread", 0);
 
   /* "fgm_eval.pyx":143
- *     Gaussian Mixture Evaluation with full Sigma: Multi-threading version
+ *     Gaussian Mixture Evaluation with full Sigma: Multithreading version
  *     """
  *     cdef int m = len(xe)             # <<<<<<<<<<<<<<
  *     cdef int i,j,sind,eind
