@@ -10,7 +10,6 @@ import matplotlib.pyplot as plt
 import graph as gp
 from utils import *
 from points_generation import *
-from initial_guess import *
 from preprocessing import *
 from gmr import *
 from fgm_eval import gm_eval
@@ -54,7 +53,7 @@ def d1psi1(x, lamb=1.):
 #################################################################
 class HDMClouds():
     def __init__(self, data, alpha=0., lamb=1., n_center=200, back_level=None, ig_method="eigenvalue",
-        minsig=None, maxsig=None, pix_freedom=1., verbose=False, wcs=None):
+        minsig=None, maxsig=None, kappa=5., verbose=False, wcs=None):
 
         #############################################################
         # Preprocessing: Estimation of back_level, computing mask, 
@@ -142,7 +141,7 @@ class HDMClouds():
         w *= data.max()/u.max()
 
         # agglomeration
-        w_red,mu_red,sig_red = mixture_reduction(w, mu, sig, 2*n_center, verbose=False)
+        w_red,mu_red,sig_red = mixture_reduction(w, mu, sig, n_center, verbose=False)
 
         # evaluation points
         #xe = mu_red[:,0]
@@ -152,7 +151,7 @@ class HDMClouds():
         points_eval = np.vstack([xe,ye]).T
 
         # agglomeration must go on
-        w_red,mu_red,sig_red = mixture_reduction(w_red, mu_red, sig_red, n_center, verbose=False)
+        #w_red,mu_red,sig_red = mixture_reduction(w_red, mu_red, sig_red, n_center, verbose=False)
 
         # gaussian center points
         xc = mu_red[:,0]
@@ -179,7 +178,7 @@ class HDMClouds():
         minsig = np.min(np.abs(sig_red))
         maxsig = 3*np.max(np.abs(sig_red))
         epsilon = 1e-6 # little shift to avoid NaNs in inv_sig_mapping
-        neigh_indexes,neigh_indexes_aux = compute_neighbors(mu_red, points_eval, 5*maxsig)
+        neigh_indexes,neigh_indexes_aux = compute_neighbors(mu_red, points_eval, kappa*maxsig)
         self.nind1 = neigh_indexes
         self.nind_aux1 = neigh_indexes_aux
 
@@ -187,7 +186,7 @@ class HDMClouds():
         #self.nind2 = neigh_indexes
         #self.nind_aux2 = neigh_indexes_aux
 
-        neigh_indexes,neigh_indexes_aux = compute_neighbors(mu_red, points_grid, 5*maxsig)
+        neigh_indexes,neigh_indexes_aux = compute_neighbors(mu_red, points_grid, kappa*maxsig)
         self.nind3 = neigh_indexes
         self.nind_aux3 = neigh_indexes_aux
 
@@ -202,6 +201,7 @@ class HDMClouds():
         self.xc = xc; self.yc = yc
         self.minsig = minsig
         self.maxsig = maxsig
+        self.kappa = kappa
         ##########################
         # optimization parameters
         self.w = np.sqrt(w_red)

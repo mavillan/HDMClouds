@@ -10,7 +10,6 @@ import matplotlib.pyplot as plt
 import graph as gp
 from utils import *
 from points_generation import *
-from initial_guess import *
 from preprocessing import *
 from gmr import *
 
@@ -156,16 +155,15 @@ class HDMClouds():
         xc = mu_red[:,0]
         yc = mu_red[:,1]
 
-        # # sig as a 2D array
-        # sig = []
-        # for i in range(sig_red.shape[0]):
-        #     sig.append( [sig_red[i,0,0],sig_red[i,0,1],sig_red[i,1,1]] )
-        # sig = np.asarray(sig)
-
-        # covariance matrix truncation
-        sig_red =  [np.mean((np.linalg.eig(cov)[0]))**(1./2) for cov in sig_red]
-        sig = np.asarray([[_sig,_sig] for _sig in sig_red])
-        sig = sig.ravel()
+        # Extracting sigx, sigy and theta from covariances
+        sig = []
+        theta = []
+        for cov in sig_red:
+            lam,V = np.linalg.eig(cov)
+            sig.append( np.sqrt(np.sort(lam)[::-1]) )
+            theta.append( np.arccos(V.T[0,0]) )
+        sig = np.asarray(sig).ravel()
+        theta = np.asarray(theta)
 
 
         if verbose:
@@ -212,8 +210,8 @@ class HDMClouds():
         self.w0 = np.copy(w_red)
         self.sig = inv_sig_mapping(sig+epsilon, minsig, maxsig)
         self.sig0 = np.copy(sig)
-        self.theta = np.zeros(n_center)
-        self.theta0 = np.zeros(n_center)
+        self.theta = inv_theta_mapping(theta)
+        self.theta0 = np.copy(theta)
         ###########################
         self.d1psi1 = d1psi1
         self.alpha = alpha
