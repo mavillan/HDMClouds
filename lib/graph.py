@@ -372,6 +372,28 @@ def caa_show(data, caa, save_path=None, wcs=None):
     plt.show()
     
 
+
+def eccentricity_plot(data, xc, yc, sig, wcs=None):
+    # we first compute eccentricity
+    ecc = np.empty(len(xc))
+    for i,_sig in enumerate(sig.reshape((-1,2))):
+        ecc[i] = 1- np.min(_sig)**2/np.max(_sig)**2
+        
+    x_scale = data.shape[0]-1
+    y_scale = data.shape[1]-1
+    fig = plt.figure(figsize=(12,9))
+    if wcs is not None: fig.gca(projection=wcs)
+    ax = plt.gca()
+    ax.imshow(data, vmin=data.min(), vmax=data.max(), cmap=plt.cm.gray_r)
+    ax.invert_yaxis()
+    plt.grid()
+    plt.scatter(yc*y_scale, xc*x_scale , c=ecc, s=15, cmap=plt.cm.cool)
+    plt.clim(0.,1.)
+    plt.colorbar()
+    plt.show()  
+
+
+
 ########################################################
 # 3D only functions
 ########################################################
