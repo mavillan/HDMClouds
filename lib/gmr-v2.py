@@ -3,6 +3,7 @@ import numba
 from numba import prange
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
+from utils import compute_neighbors2
 
 ii32 = np.iinfo(np.int32)
 INAN = ii32.max
@@ -333,69 +334,32 @@ def gaussian_reduction(c, mu, sig, n_comp, metric=kl_diss, verbose=True):
     
     #return structs_dict,htree
     # return c,mu,sig
-    
 
-def compute_neighbors(mu_center, mu_eval, maxsig):
-    nn = NearestNeighbors(radius=maxsig, algorithm="ball_tree", n_jobs=-1)
-    nn.fit(mu_center)
-    neigh_indexes_arr = nn.radius_neighbors(mu_eval, return_distance=False)
-    
-    # creating the initial array
-    maxlen = 0
-    for arr in neigh_indexes_arr:
-        if len(arr)>maxlen:
-            maxlen = len(arr)
-    neigh_indexes = INAN*np.ones((len(neigh_indexes_arr),maxlen-1), dtype=np.int32)
-    
-    # filling it with the correct indexes
-    for i,arr in enumerate(neigh_indexes_arr):
-        ll = arr.tolist(); ll.remove(i); ll.sort()
-        for j,index in enumerate(ll):
-            neigh_indexes[i,j] = index      
-    return nn,neigh_indexes
-
-
-
-def build_diss_matrix():
-    pass
-    
-    
 
 @numba.jit(nopython=True)
-def least_dissimilar(diss_matrix, indexes, nn_indexes):
-    max_neigh = diss_matrix.shape[1]
-    i_min = -1; j_min = -1
+def least_dissimilar(c, mu, sig, indexes, nn_indexes):
     diss_min = np.inf
-    for i in indexes:
-        for j in range(max_neigh):
-            jj = nn_indexes[i,j]
-            if i==jj: continue
-            if diss_matrix[i,j]==-1: break
-            if diss_matrix[i,j]<diss_min:
-                diss_min = diss_matrix[i,j]
-                i_min = i
-                j_min = nn_indexes[i,j]
-    return i_min,j_min
+    for i in range(len(indexes)):
+        i = indexes[i]
+        for j in nn_indexes[i]:
+            if j==INAN: break
+            if j==i: continue
+            diss = kl_diss(c[i], mu[i], sig[i], c[j], mu[j], sig[j])
+            if diss < diss_min: 
+                i_min = i; j_min = j
+                diss_min = diss
+    return i_min, j_min
 
 
 
-
-def radius_search(nn, mu, max_neigh, merge_mapping, nindex):
+def radius_search(nn, mu, max_neigh, merge_mapping):
     neigh_arr = nn.radius_neighbors([mu], return_distance=False)[0]
     for i in range(len(neigh_arr)):
-        # avoiding neighbor of itself
-        if neigh_arr[i]==nindex:
-            neigh_arr[i] = INAN
-            continue
         neigh_arr[i] = merge_mapping[neigh_arr[i]]
     neigh_arr = np.unique(neigh_arr)
     if len(neigh_arr)>max_neigh:
         neigh_arr = nn.kneighbors([mu], n_neighbors=max_neigh, return_distance=False)[0]
         for i in range(len(neigh_arr)):
-            # avoiding neighbor of itself
-            if neigh_arr[i]==nindex:
-                neigh_arr[i] = INAN
-                continue
             neigh_arr[i] = merge_mapping[neigh_arr[i]]
         neigh_arr = np.unique(neigh_arr)
     ret = INAN*np.ones(max_neigh, dtype=np.int32)
@@ -405,20 +369,20 @@ def radius_search(nn, mu, max_neigh, merge_mapping, nindex):
 
 @numba.jit(nopython=True)
 def update_nn_indexes(nn_indexes, indexes, nindex, dindex):
-    max_neigh = nn_indexes.shape[1]
+    m,n = nn_indexes.shape
     for i in indexes:
         flag1 = False
         flag2 = False
-        for j in range(max_neigh):
-            ind = nn_indexes[i,j]
+        for k in range(n):
+            ind = nn_indexes[i,k]
             if ind==INAN : break
             if ind==nindex: flag1 = True
             if ind==dindex and flag1:
-                nn_indexes[i,j] = INAN
+                nn_indexes[i,k] = INAN
                 flag2 = True
                 break
             if ind==dindex and not flag1:
-                nn_indexes[i,j] = nindex
+                nn_indexes[i,k] = nindex
                 flag2 = True
                 break
         if flag2:
@@ -440,32 +404,13 @@ def get_index(array, value):
     return -1
 
 
-@numba.jit(nopython=True)
-def updated_diss_matrix(w, mu, sig, diss_matrix, indexes, nn_indexes, nindex):
-    max_neigh = nn_indexes.shape[1]
-    for i in indexes:
-        if i==nindex: continue # special case (see below)
-        for j in range(max_neigh):
-            jj = nn_indexes[i,j]
-            if jj==INAN: break
-            if jj==nindex:
-                diss_matrix[i,j] = kl_diss(w[i],mu[i],sig[i],w[jj],mu[jj],sig[jj])
-    # special case
-    for j in range(max_neigh):
-        jj = nn_indexes[nindex,j]
-        if jj!=INAN:
-            diss_matrix[nindex,j] = kl_diss(w[nindex],mu[nindex],sig[nindex],w[jj],mu[jj],sig[jj])
-        else:
-            diss_matrix[nindex,j] = -1
-
-
-def mixture_reduction(w, mu, sig, n_comp, metric=kl_diss, isomorphic=False, verbose=True):
+def mixture_reduction(c, mu, sig, n_comp, metric=kl_diss, isomorphic=False, verbose=True):
     """
     Gaussian Mixture Reduction Through KL-upper bound approach
     """
 
     # original size of the mixture
-    M = len(w) 
+    M = len(c) 
     # target size of the mixture
     N = n_comp
     # dimensionality of data
@@ -480,7 +425,7 @@ def mixture_reduction(w, mu, sig, n_comp, metric=kl_diss, isomorphic=False, verb
         maxsig = 3*max([np.max(np.linalg.eig(cov)[0])**(1./2) for cov in sig])
 
     indexes = np.arange(M, dtype=np.int32)
-    nn,nn_indexes = compute_neighbors(mu,mu,maxsig)
+    nn,nn_indexes = compute_neighbors2(mu,mu,maxsig)
 
     # idea: keep track that i-th component is merged into merged[i]-th
     merge_mapping = np.arange(M, dtype=np.int32)
@@ -488,32 +433,20 @@ def mixture_reduction(w, mu, sig, n_comp, metric=kl_diss, isomorphic=False, verb
     # max number of neighbors
     max_neigh = nn_indexes.shape[1]
     
-    # computing the initial dissimilarity matrix
-    diss_matrix = -1.*np.ones((M,max_neigh))
-    for i in range(M):
-        for j in range(max_neigh):
-            jj = nn_indexes[i,j]
-            if jj==INAN: break
-            diss_matrix[i,j] = kl_diss(w[i], mu[i], sig[i], w[jj], mu[jj], sig[jj])     
-    
     # main loop
     while M>N:
-        i_min, j_min = least_dissimilar(diss_matrix, indexes, nn_indexes)
-        if j_min==INAN:
-            print(nn_indexes[i_min])
-            print(diss_matrix[i_min])
-        w_m, mu_m, sig_m = merge(w[i_min], mu[i_min], sig[i_min], 
-                                 w[j_min], mu[j_min], sig[j_min])
+        i_min, j_min = least_dissimilar(c, mu, sig, indexes, nn_indexes)
+        w_m, mu_m, sig_m = merge(c[i_min], mu[i_min], sig[i_min], 
+                                 c[j_min], mu[j_min], sig[j_min])
         if verbose: print('Merged components {0} and {1}'.format(i_min, j_min))   
         # updating structures
         nindex = min(i_min,j_min) # index of new component
         dindex = max(i_min,j_min) # index of del component
-        w[nindex] = w_m; mu[nindex] = mu_m; sig[nindex] = sig_m
+        c[nindex] = w_m; mu[nindex] = mu_m; sig[nindex] = sig_m
         indexes = np.delete(indexes, get_index(indexes,dindex))
         update_merge_mapping(merge_mapping, nindex, dindex)
-        nn_indexes[nindex] = radius_search(nn, mu_m, max_neigh, merge_mapping, nindex)
+        nn_indexes[nindex] = radius_search(nn, mu_m, max_neigh, merge_mapping)
         update_nn_indexes(nn_indexes, indexes, nindex, dindex)
-        updated_diss_matrix(w, mu, sig, diss_matrix, indexes, nn_indexes, nindex)
         M -= 1
 
     # indexes of "alive" mixture components
