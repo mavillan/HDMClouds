@@ -13,6 +13,9 @@ MAXINT = ii32.max
 
 @numba.jit('float64[:,:] (float64[:], float64[:])', nopython=True)
 def _outer(x, y):
+    """
+    Computes the outer production between 1d-ndarrays x and y.
+    """
     m = x.shape[0]
     n = y.shape[0]
     res = np.empty((m, n), dtype=np.float64)
@@ -25,8 +28,7 @@ def _outer(x, y):
 @numba.jit('float64 (float64[:,:])', nopython=True)
 def _det(X):
     """
-    Direct computation of determinant for 
-    matrices of size 2x2 and 3x3
+    Direct computation of determinant for matrices of size 2x2 and 3x3
     """
     n = X.shape[0]
     if n==2:
@@ -37,18 +39,19 @@ def _det(X):
                X[2,0] * (X[0,1] * X[1,2] - X[1,1] * X[0,2])
 
 
+
 @numba.jit('float64 (float64[:], float64[:], float64[:,:])', nopython=True)
-def normal(x, mu, sig):
+def normal(x, mu, cov):
+    """
+    Normal distribution with parameters mu (mean) and cov (covariance matrix)
+    """
     d = mu.shape[0]
-    return (1./np.sqrt((2.*np.pi)**d * np.linalg.det(sig))) * np.exp(-0.5*np.dot(x-mu, np.dot(np.linalg.inv(sig), x-mu)))
+    return (1./np.sqrt((2.*np.pi)**d * np.linalg.det(cov))) * np.exp(-0.5*np.dot(x-mu, np.dot(np.linalg.inv(cov), x-mu)))
 
 
-def remove(l, indexes):
-    """
-    Remove elements from list
-    yielding a new list
-    """
-    return [val for i,val in enumerate(l) if i not in indexes]
+
+def normalize(w, mu, cov):
+    pass
 
 
 def ncomp_finder(kl_hist, w_size=10):
@@ -73,38 +76,44 @@ def ncomp_finder(kl_hist, w_size=10):
     return len(kl_hist)-i
 
 
-#################################################################
-# MOMENT PRESERVING GAUSSIAN
-#################################################################
-
 
 @numba.jit('Tuple((float64, float64[:], float64[:,:])) (float64, float64[:], \
             float64[:,:], float64, float64[:], float64[:,:])', nopython=True)
-def merge(w1, mu1, sig1, w2, mu2, sig2):
+def merge(w1, mu1, cov1, w2, mu2, cov2):
+    """
+    Computes the moment preserving merge of components (w1,mu1,cov1) and
+    (w2,mu2,cov2)
+    """
     w_m = w1+w2
     mu_m = (w1/w_m)*mu1 + (w2/w_m)*mu2
-    sig_m = (w1/w_m)*sig1 + (w2/w_m)*sig2 + (w1*w2/w_m**2)*_outer(mu1-mu2, mu1-mu2)
-    return (w_m, mu_m, sig_m)
+    cov_m = (w1/w_m)*cov1 + (w2/w_m)*cov2 + (w1*w2/w_m**2)*_outer(mu1-mu2, mu1-mu2)
+    return (w_m, mu_m, cov_m)
+
 
 
 @numba.jit('Tuple((float64, float64[:], float64[:,:])) (float64, float64[:], \
             float64[:,:], float64, float64[:], float64[:,:])', nopython=True)
-def isomorphic_merge(w1, mu1, sig1, w2, mu2, sig2):
+def isomorphic_merge(w1, mu1, cov1, w2, mu2, cov2):
+    """
+    Computes the isomorphic moment preserving merge of components (w1,mu1,cov1) and
+    (w2,mu2,cov2)
+    """
     d = len(mu1)
     w_m = w1+w2
     mu_m = (w1/w_m)*mu1 + (w2/w_m)*mu2
-    sig_m = (w1/w_m)*sig1 + (w2/w_m)*sig2 + (w1*w2/w_m**2) * np.abs(_det(_outer(mu1-mu2, mu1-mu2)))**(1./d) * np.identity(d)
-    return (w_m, mu_m, sig_m)
+    cov_m = (w1/w_m)*cov1 + (w2/w_m)*cov2 + (w1*w2/w_m**2) * np.abs(_det(_outer(mu1-mu2, mu1-mu2)))**(1./d) * np.identity(d)
+    return (w_m, mu_m, cov_m)
+
 
 
 @numba.jit('Tuple((float64, float64[:], float64[:,:])) (float64[:], \
             float64[:,:], float64[:,:,:])', nopython=True)
-def merge_full(w, mu, sig):
+def merge_full(w, mu, cov):
     n = mu.shape[0]
     d = mu.shape[1]
     w_m = np.sum(w)
     mu_m = np.zeros(d)
-    sig_m = np.zeros((d,d))
+    cov_m = np.zeros((d,d))
 
     #mean calculation
     for i in range(n):
@@ -113,44 +122,39 @@ def merge_full(w, mu, sig):
 
     #covariance calculation
     for i in range(n):
-        sig_m += w[i] * ( sig[i] + _outer(mu[i]-mu_m, mu[i]-mu_m) )
-    sig_m /= w_m
+        cov_m += w[i] * ( cov[i] + _outer(mu[i]-mu_m, mu[i]-mu_m) )
+    cov_m /= w_m
 
-    return (w_m, mu_m, sig_m)
+    return (w_m, mu_m, cov_m)
 
 
 
-###########################################################################
-# ISD: Integral Square Difference
-# ref: Cost-Function-Based Gaussian Mixture Reduction for Target Tracking
-###########################################################################
 @numba.jit('float64 (float64, float64[:], float64[:,:], float64, float64[:], float64[:,:])', nopython=True)
-def isd_diss(w1, mu1, sig1, w2, mu2, sig2):
-    # merged moment preserving gaussian
-    w_m, mu_m, sig_m = merge(w1, mu1, sig1, w2, mu2, sig2)
-    # ISD analytical computation between merged component and the pair of gaussians
-    Jhr = w1*w_m * normal(mu1, mu_m, sig1+sig_m) + w2*w_m * normal(mu2, mu_m, sig2+sig_m)
-    Jrr = w_m**2 * (1./np.sqrt((2*np.pi)**2 * np.linalg.det(2*sig_m)))
-    Jhh = (w1**2)*(1./np.sqrt((2*np.pi)**2 * np.linalg.det(2*sig1))) + \
-          (w2**2)*(1./np.sqrt((2*np.pi)**2 * np.linalg.det(2*sig2))) + \
-          2*w1*w2*normal(mu1, mu2, sig1+sig2)
+def kl_diss(w1, mu1, cov1, w2, mu2, cov2):
+    """
+    Computation of the KL-divergence (dissimilarity) upper bound between components 
+    [(w1,mu1,cov1), (w2,mu2,cov2)]) and its moment preserving merge, as proposed in 
+    ref: A Kullback-Leibler Approach to Gaussian Mixture Reduction
+    """
+    w_m, mu_m, cov_m = merge(w1, mu1, cov1, w2, mu2, cov2)
+    return 0.5*((w1+w2)*np.log(_det(cov_m)) - w1*np.log(_det(cov1)) - w2*np.log(_det(cov2)))
+
+
+
+@numba.jit('float64 (float64, float64[:], float64[:,:], float64, float64[:], float64[:,:])', nopython=True)
+def isd_diss(w1, mu1, cov1, w2, mu2, cov2):
+    """
+    Computes the ISD (Integral Square Difference between components [(w1,mu1,cov1), (w2,mu2,cov2)])
+    and its moment preserving merge. Ref: Cost-Function-Based Gaussian Mixture Reduction for Target Tracking
+    """
+    w_m, mu_m, cov_m = merge(w1, mu1, cov1, w2, mu2, cov2)
+    Jhr = w1*w_m * normal(mu1, mu_m, cov1+cov_m) + w2*w_m * normal(mu2, mu_m, cov2+cov_m)
+    Jrr = w_m**2 * (1./np.sqrt((2*np.pi)**2 * np.linalg.det(2*cov_m)))
+    Jhh = (w1**2)*(1./np.sqrt((2*np.pi)**2 * np.linalg.det(2*cov1))) + \
+          (w2**2)*(1./np.sqrt((2*np.pi)**2 * np.linalg.det(2*cov2))) + \
+          2*w1*w2*normal(mu1, mu2, cov1+cov2)
     return Jhh - 2*Jhr + Jrr
 
-
-#normalized version
-@numba.jit('float64 (float64, float64[:], float64[:,:], float64, float64[:], float64[:,:])', nopython=True)
-def isd_diss_(w1, mu1, sig1, w2, mu2, sig2):
-    _w1 = w1 / (w1 + w2)
-    _w2 = w2 / (w1 + w2)
-    # merged moment preserving gaussian
-    w_m, mu_m, sig_m = merge(_w1, mu1, sig1, _w2, mu2, sig2)
-    # ISD analytical computation between merged component and the pair of gaussians
-    Jhr = _w1*w_m * normal(mu1, mu_m, sig1+sig_m) + _w2*w_m * normal(mu2, mu_m, sig2+sig_m)
-    Jrr = w_m**2 * (1./np.sqrt((2*np.pi)**2 * np.linalg.det(2*sig_m)))
-    Jhh = (_w1**2)*(1./np.sqrt((2*np.pi)**2 * np.linalg.det(2*sig1))) + \
-          (_w2**2)*(1./np.sqrt((2*np.pi)**2 * np.linalg.det(2*sig2))) + \
-          2*_w1*_w2*normal(mu1, mu2, sig1+sig2)
-    return Jhh - 2*Jhr + Jrr
 
 
 @numba.jit('float64 (float64[:], float64[:,:], float64[:,:,:])', nopython=True)
@@ -163,77 +167,24 @@ def isd_diss_full(w, mu, sig):
     Jhr = 0.
     Jrr = w_m**2 * (1./np.sqrt((2*np.pi)**2 * np.linalg.det(2*sig_m)))
     Jhh = 0.
-
     for i in range(c):  
-        Jhr += w[i]*w_m * normal(mu[i], mu_m, sig[i]+sig_m)
-    
+        Jhr += w[i]*w_m * normal(mu[i], mu_m, sig[i]+sig_m)   
     for i in range(c):
         for j in range(c):
             Jhh += w[i]*w[j] * normal(mu[i], mu[j], sig[i]+sig[j])
-
-    return Jhh - 2*Jhr + Jrr
-
-
-@numba.jit('float64 (float64[:], float64[:,:], float64[:,:,:], \
-                     float64[:], float64[:,:], float64[:,:,:])', nopython=True)
-def isd_diss_full_(w1, mu1, sig1, w2, mu2, sig2):
-    # number of components
-    h = len(w1)
-    r = len(w2)
-
-    # ISD computation between merge and components
-    Jhr = 0.
-    Jrr = 0.
-    Jhh = 0.
-
-    for i in range(h):
-        for j in range(r):
-            Jhr += w1[i]*w2[j] * normal(mu1[i], mu2[j], sig1[i]+sig2[j])
-
-    for i in range(r):
-        for j in range(r):
-            Jrr += w2[i]*w2[j] * normal(mu2[i], mu2[j], sig2[i]+sig2[j])
-    
-    for i in range(h):
-        for j in range(h):
-            Jhh += w1[i]*w1[j] * normal(mu1[i], mu1[j], sig1[i]+sig1[j])
-
     return Jhh - 2*Jhr + Jrr
 
 
 
-#################################################################
-# KL-DIVERGENCE UPPER BOUND
-# ref: A Kullback-Leibler Approach to Gaussian Mixture Reduction
-#################################################################
-@numba.jit('float64 (float64, float64[:], float64[:,:], float64, float64[:], float64[:,:])', nopython=True)
-def kl_diss(w1, mu1, sig1, w2, mu2, sig2):
-    # merged moment preserving gaussian
-    w_m, mu_m, sig_m = merge(w1, mu1, sig1, w2, mu2, sig2)
-    # KL divergence upper bound as proposed in: A Kullback-Leibler Approach to Gaussian Mixture Reduction
-    return 0.5*((w1+w2)*np.log(_det(sig_m)) - w1*np.log(_det(sig1)) - w2*np.log(_det(sig2)))
-
-
-#################################################################
-# MAIN GAUSSIAN REDUCTION FUNCTION
-#################################################################
-# def gaussian_reduction(c, mu, sig, n_comp, metric='KL', verbose=True):
-#     if metric=='KL': 
-#         _metric = kl_diss
-#         isd_hist = list(); kl_hist = list()
-#     elif metric=='ISD': 
-#         _metric = isd_diss
-#         isd_hist = list(); kl_hist = None
-#     elif metric=='ISD_':
-#         _metric = isd_diss_
-#         isd_hist = list(); kl_hist = None
-#     else: return None
-
+# def gaussian_reduction(c, mu, cov, n_comp, metric=kl_diss, verbose=True):
+#     """
+#     Gaussian Mixture Reduction Through KL-upper bound approach
+#     """
 #     d = mu.shape[1]
 #     c = c.tolist()
 #     mu = list(map(np.array, mu.tolist()))
-#     if d==2: sig = [(s**2)*np.identity(2) for s in sig]
-#     elif d==3: sig = [(s**2)*np.identity(3) for s in sig]
+#     if d==2: cov = [(s**2)*np.identity(2) for s in cov]
+#     elif d==3: cov = [(s**2)*np.identity(3) for s in cov]
 
 #     # indexes of the actual gaussian components
 #     components = [i for i in range(len(c))]
@@ -249,92 +200,33 @@ def kl_diss(w1, mu1, sig1, w2, mu2, sig2):
 #             ii = components[i]
 #             for j in range(i+1,m):
 #                 jj = components[j]
-#                 diss = _metric(c[ii], mu[ii], sig[ii], c[jj], mu[jj], sig[jj])
+#                 diss = metric(c[ii], mu[ii], cov[ii], c[jj], mu[jj], cov[jj])
 #                 if diss < diss_min: 
 #                     i_min = i; j_min = j
 #                     ii_min = ii; jj_min = jj 
 #                     diss_min = diss
 #         # compute the moment preserving  merged gaussian
-#         w_m, mu_m, sig_m = merge(c[ii_min], mu[ii_min], sig[ii_min], 
-#                                  c[jj_min], mu[jj_min], sig[jj_min])
-        
-#         if (metric=='ISD' or metric=='ISD_') and verbose:
-#             print('Merged components {0} and {1} with {2} ISD dist'.format(ii_min, jj_min, diss_min))
-#             isd_hist.append(diss_min)    
-#         elif metric=='KL' and verbose:
-#             ISD_diss = isd_diss(c[ii_min], mu[ii_min], sig[ii_min], c[jj_min], mu[jj_min], sig[jj_min])
+#         w_m, mu_m, cov_m = merge(c[ii_min], mu[ii_min], cov[ii_min], 
+#                                  c[jj_min], mu[jj_min], cov[jj_min])
+          
+#         if verbose:
+#             ISD_diss = isd_diss(c[ii_min], mu[ii_min], cov[ii_min], c[jj_min], mu[jj_min], cov[jj_min])
 #             print('Merged components {0} and {1} with {2} KL dist and {3} ISD dist'.format(ii_min, jj_min, diss_min, ISD_diss))
-#             isd_hist.append(ISD_diss), kl_hist.append(diss_min)
 
 #         # updating structures   
 #         del components[max(i_min, j_min)]
 #         del components[min(i_min, j_min)]
 #         components.append(new_comp)
-#         c.append(w_m); mu.append(mu_m); sig.append(sig_m)
+#         c.append(w_m); mu.append(mu_m); cov.append(cov_m)
 #         htree[new_comp] = (min(ii_min,jj_min), max(ii_min,jj_min))
 #         tmp = structs_dict[min(ii_min,jj_min)] + structs_dict[max(ii_min,jj_min)]
 #         tmp.sort()
 #         structs_dict[new_comp] = tmp
 #         new_comp += 1
-    
-#     #return structs_dict,htree
-#     return c,mu,sig
 
 
 
-
-def gaussian_reduction(c, mu, sig, n_comp, metric=kl_diss, verbose=True):
-    """
-    Gaussian Mixture Reduction Through KL-upper bound approach
-    """
-    d = mu.shape[1]
-    c = c.tolist()
-    mu = list(map(np.array, mu.tolist()))
-    if d==2: sig = [(s**2)*np.identity(2) for s in sig]
-    elif d==3: sig = [(s**2)*np.identity(3) for s in sig]
-
-    # indexes of the actual gaussian components
-    components = [i for i in range(len(c))]
-    structs_dict = {i:[i] for i in range(len(c))}
-    htree = {}
-    new_comp = len(c)
-
-    # main loop
-    while len(components)>n_comp:
-        m = len(components)
-        diss_min = np.inf
-        for i in range(m):
-            ii = components[i]
-            for j in range(i+1,m):
-                jj = components[j]
-                diss = metric(c[ii], mu[ii], sig[ii], c[jj], mu[jj], sig[jj])
-                if diss < diss_min: 
-                    i_min = i; j_min = j
-                    ii_min = ii; jj_min = jj 
-                    diss_min = diss
-        # compute the moment preserving  merged gaussian
-        w_m, mu_m, sig_m = merge(c[ii_min], mu[ii_min], sig[ii_min], 
-                                 c[jj_min], mu[jj_min], sig[jj_min])
-          
-        if verbose:
-            ISD_diss = isd_diss(c[ii_min], mu[ii_min], sig[ii_min], c[jj_min], mu[jj_min], sig[jj_min])
-            print('Merged components {0} and {1} with {2} KL dist and {3} ISD dist'.format(ii_min, jj_min, diss_min, ISD_diss))
-
-        # updating structures   
-        del components[max(i_min, j_min)]
-        del components[min(i_min, j_min)]
-        components.append(new_comp)
-        c.append(w_m); mu.append(mu_m); sig.append(sig_m)
-        htree[new_comp] = (min(ii_min,jj_min), max(ii_min,jj_min))
-        tmp = structs_dict[min(ii_min,jj_min)] + structs_dict[max(ii_min,jj_min)]
-        tmp.sort()
-        structs_dict[new_comp] = tmp
-        new_comp += 1
-    
-    #return structs_dict,htree
-    # return c,mu,sig
-    
-
+@numba.jit('(float64[:], float64)')
 def _compute_neighbors(mu_center, maxsig):
     nn = NearestNeighbors(radius=maxsig, algorithm="ball_tree", n_jobs=-1)
     nn.fit(mu_center)
@@ -356,20 +248,20 @@ def _compute_neighbors(mu_center, maxsig):
 
 
 
-@numba.jit(nopython=True)
-def build_diss_matrix(w, mu, sig, nn_indexes):
+@numba.jit('float64[:,:] (float64[:], float64[:,:], float64[:,:,:], int32[:,:])', nopython=True)
+def build_diss_matrix(w, mu, cov, nn_indexes):
     M,max_neigh = nn_indexes.shape
     diss_matrix = -1.*np.ones((M,max_neigh))
     for i in range(M):
         for j in range(max_neigh):
             jj = nn_indexes[i,j]
             if jj==MAXINT: break
-            diss_matrix[i,j] = kl_diss(w[i],mu[i],sig[i],w[jj],mu[jj],sig[jj])  
+            diss_matrix[i,j] = kl_diss(w[i],mu[i],cov[i],w[jj],mu[jj],cov[jj])  
     return diss_matrix
 
 
 
-@numba.jit(nopython=True)
+@numba.jit('Tuple((int32,int32)) (float64[:,:], int32[:], int32[:,:])', nopython=True)
 def least_dissimilar(diss_matrix, indexes, nn_indexes):
     max_neigh = diss_matrix.shape[1]
     i_min = -1; j_min = -1
@@ -384,7 +276,8 @@ def least_dissimilar(diss_matrix, indexes, nn_indexes):
     return i_min,j_min
 
 
-@numba.jit(nopython=True)
+
+@numba.jit('int32 (int32[:], int32)', nopython=True)
 def get_index(array, value):
     n = len(array)
     for i in range(n):
@@ -392,7 +285,8 @@ def get_index(array, value):
     return -1
 
 
-@numba.jit(nopython=True)
+
+@numba.jit('(int32[:], int32, int32)', nopython=True)
 def update_merge_mapping(merge_mapping, nindex, dindex):
     n = len(merge_mapping)
     for i in range(n):
@@ -400,6 +294,7 @@ def update_merge_mapping(merge_mapping, nindex, dindex):
             merge_mapping[i] = nindex
 
 
+@numba.jit()
 def radius_search(nn, mu, max_neigh, merge_mapping, nindex, dindex):
     neigh_arr = nn.radius_neighbors([mu], return_distance=False)[0]
     for i in range(len(neigh_arr)):
@@ -425,14 +320,16 @@ def radius_search(nn, mu, max_neigh, merge_mapping, nindex, dindex):
     return ret
 
 
-@numba.jit(nopython=True)
-def update_structs(nn_indexes, diss_matrix, w, mu, sig, indexes, nindex, dindex):
+@numba.jit('(int32[:,:], float64[:,:], float64[:], float64[:,:], float64[:,:,:], int32[:], int32, int32)', nopython=True)
+def update_structs(nn_indexes, diss_matrix, w, mu, cov, indexes, nindex, dindex):
     """
     Updates the nn_indexes and diss_matrix structs by removing the items
     corresponding to dindex and updating the ones corresponding to nindex
     """
+    num_comp = len(indexes)
     max_neigh = nn_indexes.shape[1]
-    for i in indexes:
+    for i in prange(num_comp):
+        i = indexes[i]
         if i==nindex: continue # this is an special case (see below)
         flag1 = False
         flag2 = False
@@ -440,7 +337,7 @@ def update_structs(nn_indexes, diss_matrix, w, mu, sig, indexes, nindex, dindex)
             jj = nn_indexes[i,j]
             if jj==MAXINT: break
             if jj==nindex: 
-                diss_matrix[i,j] = kl_diss(w[i],mu[i],sig[i],w[jj],mu[jj],sig[jj])
+                diss_matrix[i,j] = kl_diss(w[i],mu[i],cov[i],w[jj],mu[jj],cov[jj])
                 flag1 = True
             elif jj==dindex and flag1:
                 nn_indexes[i,j] = MAXINT
@@ -448,7 +345,7 @@ def update_structs(nn_indexes, diss_matrix, w, mu, sig, indexes, nindex, dindex)
                 flag2 = True
             elif jj==dindex and not flag1:
                 nn_indexes[i,j] = nindex
-                diss_matrix[i,j] = kl_diss(w[i],mu[i],sig[i],w[jj],mu[jj],sig[jj])
+                diss_matrix[i,j] = kl_diss(w[i],mu[i],cov[i],w[jj],mu[jj],cov[jj])
                 flag2 = True
         if flag2:
             sorted_indexes = np.argsort(nn_indexes[i,:])
@@ -456,15 +353,20 @@ def update_structs(nn_indexes, diss_matrix, w, mu, sig, indexes, nindex, dindex)
             diss_matrix[i,:] = (diss_matrix[i,:])[sorted_indexes]
 
     # the special case...
-    for j in range(max_neigh):
+    for j in prange(max_neigh):
         jj = nn_indexes[nindex,j]
         if jj!=MAXINT:
-            diss_matrix[nindex,j] = kl_diss(w[nindex],mu[nindex],sig[nindex],w[jj],mu[jj],sig[jj])
+            diss_matrix[nindex,j] = kl_diss(w[nindex],mu[nindex],cov[nindex],w[jj],mu[jj],cov[jj])
         else:
             diss_matrix[nindex,j] = -1
 
 
-def mixture_reduction(w, mu, sig, n_comp, metric=kl_diss, isomorphic=False, verbose=True):
+
+################################################################
+# MAIN FUNCTION
+################################################################
+
+def mixture_reduction(w, mu, cov, n_comp, verbose=True):
     """
     Gaussian Mixture Reduction Through KL-upper bound approach
     """
@@ -477,12 +379,12 @@ def mixture_reduction(w, mu, sig, n_comp, metric=kl_diss, isomorphic=False, verb
     d = mu.shape[1]
 
     # we consider neighbors at a radius equivalent to the lenght of 5 pixels
-    if sig.ndim==1:
-        maxsig = 5*np.max(sig)
-        # if sig is 1-dimensional we convert it to its covariance matrix form
-        sig = np.asarray( [(val**2)*np.identity(d) for val in sig] )
+    if cov.ndim==1:
+        maxsig = 5*np.max(cov)
+        # if cov is 1-dimensional we convert it to its covariance matrix form
+        cov = np.asarray( [(val**2)*np.identity(d) for val in cov] )
     else:
-        maxsig = 5*max([np.max(np.linalg.eig(cov)[0])**(1./2) for cov in sig])
+        maxsig = 5*max([np.max(np.linalg.eig(_cov)[0])**(1./2) for _cov in cov])
 
     indexes = np.arange(M, dtype=np.int32)
     nn,nn_indexes = _compute_neighbors(mu,maxsig)
@@ -494,26 +396,26 @@ def mixture_reduction(w, mu, sig, n_comp, metric=kl_diss, isomorphic=False, verb
     max_neigh = nn_indexes.shape[1]
     
     # computing the initial dissimilarity matrix
-    diss_matrix = build_diss_matrix(w, mu, sig, nn_indexes)  
+    diss_matrix = build_diss_matrix(w, mu, cov, nn_indexes)  
     
     # main loop
     while M>N:
         i_min, j_min = least_dissimilar(diss_matrix, indexes, nn_indexes)
         if verbose: print('Merged components {0} and {1}'.format(i_min, j_min))  
-        w_m, mu_m, sig_m = merge(w[i_min], mu[i_min], sig[i_min], 
-                                 w[j_min], mu[j_min], sig[j_min])
+        w_m, mu_m, cov_m = merge(w[i_min], mu[i_min], cov[i_min], 
+                                 w[j_min], mu[j_min], cov[j_min])
  
         # updating structures
         nindex = min(i_min,j_min) # index of the new component
         dindex = max(i_min,j_min) # index of the del component
-        w[nindex] = w_m; mu[nindex] = mu_m; sig[nindex] = sig_m
+        w[nindex] = w_m; mu[nindex] = mu_m; cov[nindex] = cov_m
         indexes = np.delete(indexes, get_index(indexes,dindex))
         update_merge_mapping(merge_mapping, nindex, dindex)
         nn_indexes[nindex] = radius_search(nn, mu_m, max_neigh, merge_mapping, nindex, dindex)
-        update_structs(nn_indexes, diss_matrix, w, mu, sig, indexes, nindex, dindex)
+        update_structs(nn_indexes, diss_matrix, w, mu, cov, indexes, nindex, dindex)
         M -= 1
 
     # indexes of "alive" mixture components
-    return w[indexes],mu[indexes],sig[indexes]
+    return w[indexes],mu[indexes],cov[indexes]
 
 
