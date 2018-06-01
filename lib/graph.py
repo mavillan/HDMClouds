@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-from fgm_eval  import gm_eval
+from fgm_eval  import gm_eval2d_1 as gm_eval
 from utils3D import u_eval as u_eval3D
 from utils3D import compute_solution
 from gmr import isd_diss_full
@@ -63,10 +63,10 @@ def thresholded_image_plot(data, level, cmap=plt.cm.cubehelix, wcs=None,
                wcs=wcs, vmin=vmin, vmax=vmax)
 
 
-# def solution_plot(dfunc, w, sig, xc, yc, dims, resolution=1, mask=None,
+# def solution_plot(dfunc, w, sig, xc, yc, shape, resolution=1, mask=None,
 #                   title=None, support=5., cmap=plt.cm.cubehelix):
-#     _x = np.linspace(0., 1., resolution*dims[0]+1)
-#     _y = np.linspace(0., 1., resolution*dims[1]+1)
+#     _x = np.linspace(0., 1., resolution*shape[0]+1)
+#     _y = np.linspace(0., 1., resolution*shape[1]+1)
 #     _xe = np.asarray( [(_x[i]+_x[i+1])/2 for i in range(len(_x)-1)] )
 #     _ye = np.asarray( [(_y[i]+_y[i+1])/2 for i in range(len(_y)-1)] )
 #     len_xe = len(_xe); len_ye = len(_ye)
@@ -79,7 +79,7 @@ def thresholded_image_plot(data, level, cmap=plt.cm.cubehelix, wcs=None,
 #     u = u.reshape(len_xe, len_ye)
 
 #     # real data
-#     f = dfunc(points).reshape(dims)
+#     f = dfunc(points).reshape(shape)
 
 #     # residual
 #     res = f-u
@@ -318,7 +318,7 @@ def structs_plot(hdmc, structs_list, show_title=False, cmap1=plt.cm.cubehelix,
         _c = c[indexes]
         _sig = sig[indexes]
         u = gm_eval(_c, _sig, _xc, _yc, xgrid, ygrid)
-        _u = u.reshape(hdmc.dims)
+        _u = u.reshape(hdmc.shape)
 
         if show_isd:
             _isd = isd_diss_full(w[indexes], mu[indexes], Sig[indexes])
@@ -473,7 +473,7 @@ def solution_plot3D(hdmc):
 
     # approximated solution
     xc, yc, zc, c, sig = hdmc.get_params_mapped()
-    u = compute_solution(c, sig, xc, yc, zc, hdmc.dims, back_level=hdmc.back_level)
+    u = compute_solution(c, sig, xc, yc, zc, hdmc.shape, back_level=hdmc.back_level)
     _u = u.sum(axis=0)
     _u -= dmin; _u /= dmax
 
@@ -538,9 +538,9 @@ def structs_plot3D(hdmc, structs_list, n_levels=1, save_path=None):
 
     # generating the evaluation points
     # FIX POINTS POSITIONS IN THE NEAR FUTURE
-    _xe = np.linspace(0., 1., hdmc.dims[0]+2)[1:-1]
-    _ye = np.linspace(0., 1., hdmc.dims[1]+2)[1:-1]
-    _ze = np.linspace(0., 1., hdmc.dims[2]+2)[1:-1]
+    _xe = np.linspace(0., 1., hdmc.shape[0]+2)[1:-1]
+    _ye = np.linspace(0., 1., hdmc.shape[1]+2)[1:-1]
+    _ze = np.linspace(0., 1., hdmc.shape[2]+2)[1:-1]
     len_xe = len(_xe); len_ye = len(_ye); len_ze = len(_ze)
     Xe,Ye,Ze = np.meshgrid(_xe, _ye, _ze, sparse=False, indexing='ij')
     xe = Xe.ravel(); ye = Ye.ravel(); ze = Ze.ravel()
@@ -572,7 +572,7 @@ def structs_plot3D(hdmc, structs_list, n_levels=1, save_path=None):
         ax.grid()
 
         # contours configuration
-        minval = ((hdmc.back_level*hdmc.dims[axis]) - dmin) / dmax
+        minval = ((hdmc.back_level*hdmc.shape[axis]) - dmin) / dmax
         levels = np.linspace(minval+0.01, 0.95, n_levels)
 
         for i,indexes in enumerate(structs_list):
@@ -619,14 +619,14 @@ def structs_plot3D_(hdmc, structs_dict, n_comp):
     xc, yc, zc, c, sig = hdmc.get_params_mapped()
 
     # generating the evaluation points
-    _xe = np.linspace(0., 1., hdmc.dims[0]+2)[1:-1]
-    _ye = np.linspace(0., 1., hdmc.dims[1]+2)[1:-1]
-    _ze = np.linspace(0., 1., hdmc.dims[2]+2)[1:-1]
+    _xe = np.linspace(0., 1., hdmc.shape[0]+2)[1:-1]
+    _ye = np.linspace(0., 1., hdmc.shape[1]+2)[1:-1]
+    _ze = np.linspace(0., 1., hdmc.shape[2]+2)[1:-1]
     len_xe = len(_xe); len_ye = len(_ye); len_ze = len(_ze)
     Xe,Ye,Ze = np.meshgrid(_xe, _ye, _ze, sparse=False, indexing='ij')
     xe = Xe.ravel(); ye = Ye.ravel(); ze = Ze.ravel()  
 
-    clump_map = np.empty(hdmc.dims)
+    clump_map = np.empty(hdmc.shape)
 
     # stacked data, mapping to [0,1] and display 
     back_level = hdmc.back_level
