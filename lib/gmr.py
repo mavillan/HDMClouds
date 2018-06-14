@@ -330,48 +330,7 @@ def radius_search(nn, mu, max_neigh, merge_mapping, nindex):
     return ret
 
 
-# @numba.jit('(int32[:,:], float64[:,:], float64[:], float64[:,:], float64[:,:,:], int32[:], int32, int32)', nopython=True)
-# def update_structs(nn_indexes, diss_matrix, w, mu, cov, indexes, nindex, dindex):
-#     """
-#     Updates the nn_indexes and diss_matrix structs by removing the items
-#     corresponding to dindex and updating the ones corresponding to nindex
-#     """
-#     num_comp = len(indexes)
-#     max_neigh = nn_indexes.shape[1]
-#     for i in prange(num_comp):
-#         i = indexes[i]
-#         if i==nindex: continue # this is an special case (see below)
-#         flag1 = False
-#         flag2 = False
-#         for j in range(max_neigh):
-#             jj = nn_indexes[i,j]
-#             if jj==MAXINT: break
-#             if jj==nindex: 
-#                 diss_matrix[i,j] = kl_diss(w[i],mu[i],cov[i],w[jj],mu[jj],cov[jj])
-#                 flag1 = True
-#             elif jj==dindex and flag1:
-#                 nn_indexes[i,j] = MAXINT
-#                 diss_matrix[i,j] = -1
-#                 flag2 = True
-#             elif jj==dindex and not flag1:
-#                 nn_indexes[i,j] = nindex
-#                 diss_matrix[i,j] = kl_diss(w[i],mu[i],cov[i],w[jj],mu[jj],cov[jj])
-#                 flag2 = True
-#         if flag2:
-#             sorted_indexes = np.argsort(nn_indexes[i,:])
-#             nn_indexes[i,:] = (nn_indexes[i,:])[sorted_indexes]
-#             diss_matrix[i,:] = (diss_matrix[i,:])[sorted_indexes]
-
-#     # the special case...
-#     for j in prange(max_neigh):
-#         jj = nn_indexes[nindex,j]
-#         if jj!=MAXINT:
-#             diss_matrix[nindex,j] = kl_diss(w[nindex],mu[nindex],cov[nindex],w[jj],mu[jj],cov[jj])
-#         else:
-#             diss_matrix[nindex,j] = -1
-
-
-@numba.jit('(int32[:,:], float64[:,:], float64[:], float64[:,:], float64[:,:,:], int32[:], int32, int32)', nopython=True)
+@numba.jit('(int32[:,:], float64[:,:], float64[:], float64[:,:], float64[:,:,:], int32[:], int32, int32)', nopython=True, parallel=True, nogil=True)
 def update_structs(nn_indexes, diss_matrix, w, mu, cov, indexes, nindex, dindex):
     """
     Updates the nn_indexes and diss_matrix structs by removing the items
