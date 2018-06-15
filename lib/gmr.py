@@ -1,6 +1,5 @@
 import copy
 import numba
-from numba import prange
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
 
@@ -11,7 +10,7 @@ MAXINT = ii32.max
 # HELPER FUNCTIONS
 ################################################################
 
-@numba.jit('float64[:,:] (float64[:], float64[:])', nopython=True)
+@numba.jit('float64[:,:] (float64[:], float64[:])', nopython=True, nogil=True)
 def _outer(x, y):
     """
     Computes the outer production between 1d-ndarrays x and y.
@@ -25,7 +24,7 @@ def _outer(x, y):
     return res
 
 
-@numba.jit('float64 (float64[:,:])', nopython=True)
+@numba.jit('float64 (float64[:,:])', nopython=True, nogil=True)
 def _det(X):
     """
     Direct computation of determinant for matrices of size 2x2 and 3x3
@@ -40,7 +39,7 @@ def _det(X):
 
 
 
-@numba.jit('float64 (float64[:], float64[:], float64[:,:])', nopython=True)
+@numba.jit('float64 (float64[:], float64[:], float64[:,:])', nopython=True, nogil=True)
 def normal(x, mu, cov):
     """
     Normal distribution with parameters mu (mean) and cov (covariance matrix)
@@ -78,7 +77,7 @@ def ncomp_finder(kl_hist, w_size=10):
 
 
 @numba.jit('Tuple((float64, float64[:], float64[:,:])) (float64, float64[:], \
-            float64[:,:], float64, float64[:], float64[:,:])', nopython=True)
+            float64[:,:], float64, float64[:], float64[:,:])', nopython=True, nogil=True)
 def merge(w1, mu1, cov1, w2, mu2, cov2):
     """
     Computes the moment preserving merge of components (w1,mu1,cov1) and
@@ -88,7 +87,6 @@ def merge(w1, mu1, cov1, w2, mu2, cov2):
     mu_m = (w1/w_m)*mu1 + (w2/w_m)*mu2
     cov_m = (w1/w_m)*cov1 + (w2/w_m)*cov2 + (w1*w2/w_m**2)*_outer(mu1-mu2, mu1-mu2)
     return (w_m, mu_m, cov_m)
-
 
 
 @numba.jit('Tuple((float64, float64[:], float64[:,:])) (float64, float64[:], \
@@ -129,8 +127,8 @@ def merge_full(w, mu, cov):
 
 
 
-@numba.jit('float64 (float64, float64[:], float64[:,:], float64, float64[:], float64[:,:])', nopython=True)
-def kl_diss(w1, mu1, cov1, w2, mu2, cov2):
+@numba.jit('float64 (float64, float64[:], float64[:,:], float64, float64[:], float64[:,:])', nopython=True, nogil=True)
+def KLdiv(w1, mu1, cov1, w2, mu2, cov2):
     """
     Computation of the KL-divergence (dissimilarity) upper bound between components 
     [(w1,mu1,cov1), (w2,mu2,cov2)]) and its moment preserving merge, as proposed in 
@@ -176,77 +174,6 @@ def isd_diss_full(w, mu, sig):
 
 
 
-# def gaussian_reduction(c, mu, cov, n_comp, metric=kl_diss, verbose=True):
-#     """
-#     Gaussian Mixture Reduction Through KL-upper bound approach
-#     """
-#     d = mu.shape[1]
-#     c = c.tolist()
-#     mu = list(map(np.array, mu.tolist()))
-#     if d==2: cov = [(s**2)*np.identity(2) for s in cov]
-#     elif d==3: cov = [(s**2)*np.identity(3) for s in cov]
-
-#     # indexes of the actual gaussian components
-#     components = [i for i in range(len(c))]
-#     structs_dict = {i:[i] for i in range(len(c))}
-#     htree = {}
-#     new_comp = len(c)
-
-#     # main loop
-#     while len(components)>n_comp:
-#         m = len(components)
-#         diss_min = np.inf
-#         for i in range(m):
-#             ii = components[i]
-#             for j in range(i+1,m):
-#                 jj = components[j]
-#                 diss = metric(c[ii], mu[ii], cov[ii], c[jj], mu[jj], cov[jj])
-#                 if diss < diss_min: 
-#                     i_min = i; j_min = j
-#                     ii_min = ii; jj_min = jj 
-#                     diss_min = diss
-#         # compute the moment preserving  merged gaussian
-#         w_m, mu_m, cov_m = merge(c[ii_min], mu[ii_min], cov[ii_min], 
-#                                  c[jj_min], mu[jj_min], cov[jj_min])
-          
-#         if verbose:
-#             ISD_diss = isd_diss(c[ii_min], mu[ii_min], cov[ii_min], c[jj_min], mu[jj_min], cov[jj_min])
-#             print('Merged components {0} and {1} with {2} KL dist and {3} ISD dist'.format(ii_min, jj_min, diss_min, ISD_diss))
-
-#         # updating structures   
-#         del components[max(i_min, j_min)]
-#         del components[min(i_min, j_min)]
-#         components.append(new_comp)
-#         c.append(w_m); mu.append(mu_m); cov.append(cov_m)
-#         htree[new_comp] = (min(ii_min,jj_min), max(ii_min,jj_min))
-#         tmp = structs_dict[min(ii_min,jj_min)] + structs_dict[max(ii_min,jj_min)]
-#         tmp.sort()
-#         structs_dict[new_comp] = tmp
-#         new_comp += 1
-
-
-
-# @numba.jit('(float64[:], float64)')
-# def _compute_neighbors(mu_center, maxsig):
-#     nn = NearestNeighbors(radius=maxsig, algorithm="ball_tree", n_jobs=-1)
-#     nn.fit(mu_center)
-#     neigh_indexes_arr = nn.radius_neighbors(mu_center, return_distance=False)
-    
-#     # creating the initial array
-#     maxlen = 0
-#     for arr in neigh_indexes_arr:
-#         if len(arr)>maxlen:
-#             maxlen = len(arr)
-#     neigh_indexes = MAXINT*np.ones((len(neigh_indexes_arr),maxlen-1), dtype=np.int32)
-    
-#     # filling it with the correct indexes
-#     for i,arr in enumerate(neigh_indexes_arr):
-#         ll = arr.tolist(); ll.remove(i); ll.sort()
-#         for j,index in enumerate(ll):
-#             neigh_indexes[i,j] = index      
-#     return nn,neigh_indexes
-
-
 @numba.jit('(float64[:], float64)')
 def _compute_neighbors(mu_center, maxsig):
     nn = NearestNeighbors(radius=maxsig, algorithm="ball_tree", n_jobs=-1)
@@ -268,15 +195,15 @@ def _compute_neighbors(mu_center, maxsig):
 
 
 
-@numba.jit('float64[:,:] (float64[:], float64[:,:], float64[:,:,:], int32[:,:])', nopython=True)
+@numba.jit('float64[:,:] (float64[:], float64[:,:], float64[:,:,:], int32[:,:])', nopython=True, parallel=True)
 def build_diss_matrix(w, mu, cov, nn_indexes):
     M,max_neigh = nn_indexes.shape
     diss_matrix = np.inf*np.ones((M,max_neigh))
-    for i in range(M):
+    for i in numba.prange(M):
         for j in range(max_neigh):
             jj = nn_indexes[i,j]
             if jj==MAXINT: break
-            diss_matrix[i,j] = kl_diss(w[i],mu[i],cov[i],w[jj],mu[jj],cov[jj])  
+            diss_matrix[i,j] = KLdiv(w[i],mu[i],cov[i],w[jj],mu[jj],cov[jj])  
     return diss_matrix
 
 
@@ -330,7 +257,7 @@ def radius_search(nn, mu, max_neigh, merge_mapping, nindex):
     return ret
 
 
-@numba.jit('(int32[:,:], float64[:,:], float64[:], float64[:,:], float64[:,:,:], int32[:], int32, int32)', nopython=True, parallel=True, nogil=True)
+@numba.jit('(int32[:,:], float64[:,:], float64[:], float64[:,:], float64[:,:,:], int32[:], int32, int32)', nopython=True, parallel=True)
 def update_structs(nn_indexes, diss_matrix, w, mu, cov, indexes, nindex, dindex):
     """
     Updates the nn_indexes and diss_matrix structs by removing the items
@@ -338,8 +265,8 @@ def update_structs(nn_indexes, diss_matrix, w, mu, cov, indexes, nindex, dindex)
     """
     num_comp = len(indexes)
     max_neigh = nn_indexes.shape[1]
-    for i in prange(num_comp):
-        i = indexes[i]
+    for _i in numba.prange(num_comp):
+        i = indexes[_i]
         if i==nindex: continue # this is an special case (see below)
         for j in range(max_neigh):
             jj = nn_indexes[i,j]
@@ -349,10 +276,10 @@ def update_structs(nn_indexes, diss_matrix, w, mu, cov, indexes, nindex, dindex)
                 diss_matrix[i,j] = -1       
 
     # the special case...
-    for j in prange(max_neigh):
+    for j in numba.prange(max_neigh):
         jj = nn_indexes[nindex,j]
         if jj!=MAXINT:
-            diss_matrix[nindex,j] = kl_diss(w[nindex],mu[nindex],cov[nindex],w[jj],mu[jj],cov[jj])
+            diss_matrix[nindex,j] = KLdiv(w[nindex],mu[nindex],cov[nindex],w[jj],mu[jj],cov[jj])
         else:
             diss_matrix[nindex,j] = np.inf
 
