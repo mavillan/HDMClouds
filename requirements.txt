@@ -1,2 +1,5 @@
 ghalton
 specutils
+spectral-cube
+radio-beam
+
