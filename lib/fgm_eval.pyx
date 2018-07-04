@@ -1,4 +1,9 @@
-#cython: boundscheck=False, wraparound=False, nonecheck=False, cdivision=True 
+#!python
+#cython: boundscheck=False
+#cython: wraparound=False
+#cython: nonecheck=False
+#cython: cdivision=True 
+
 import numpy as np
 from libc.math cimport exp, cos, sin
 from cython.parallel import prange
@@ -129,4 +134,25 @@ def gm_eval3d_2(double[:] w, double[:] sig, double[:] xc, double[:] yc, double[:
             j = neigh_indexes[j]
             quad = (xe[i]-xc[j])**2 + (ye[i]-yc[j])**2 +  (ze[i]-zc[j])**2
             ret[i] += w[j] * exp( -quad/sig[j]**2 )
+    return ret.base
+
+
+def gm_eval3d_3(double[:] w, double[:] sig, double[:] sigf, double[:] xc, double[:] yc, double[:] zc,
+                double[:] xe, double[:] ye, double[:] ze, long[:] neigh_indexes, long[:] neigh_indexes_aux):
+    """
+    Gaussian Mixture Evaluation with threads: Multithreading version with low memory consumption
+    """ 
+    cdef int m = xe.shape[0]
+    cdef int i,j,sind,eind
+    cdef double quad
+    cdef double[:] ret = np.zeros(m)
+    
+    for i in prange(m, nogil=True):
+        if i==0: sind = 0
+        else: sind = neigh_indexes_aux[i-1]
+        eind = neigh_indexes_aux[i]
+        for j in range(sind,eind):
+            j = neigh_indexes[j]
+            quad = ( (xe[i]-xc[j])**2 )/sigf[j]**2 + ( (ye[i]-yc[j])**2 +  (ze[i]-zc[j])**2 )/sig[j]**2
+            ret[i] += w[j]*exp(-quad)
     return ret.base
