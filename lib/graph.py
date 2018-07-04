@@ -6,6 +6,7 @@ import matplotlib.cbook
 warnings.filterwarnings("ignore",category=matplotlib.cbook.mplDeprecation)
 
 import matplotlib.pyplot as plt
+from matplotlib.ticker import FormatStrFormatter
 from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
@@ -16,12 +17,13 @@ from gmr import isd_diss_full
 from points_generation import boundary_map_caa
 
 from astropy.visualization import AsymmetricPercentileInterval
-import astropy.units as u
+import astropy.units as units
 
 font = {'fontname':'Times New Roman'}
 umap = {'RA':'RA (J2000)', 'DEC':'Dec (J2000)',
         'GLON':'Galactic Longitude', 'GLAT':'Galactic Latitude',
-        'FREQ':'FREQ [GHz]'}
+        'FREQ':'FREQ [GHz]',
+        'M/S':'Velocity [M/S]'}
 
 
 def image_plot(data, title=None, cmap=plt.cm.cubehelix, wcs=None,
@@ -217,7 +219,7 @@ def params_distribution_plot(c, sig, remove_outlier=False):
 
 
 def residual_plot(residual_variance, residual_entropy, residual_rms, iter_list):
-    plt.figure(figsize=(12,5))
+    plt.figure(figsize=(8,5))
     plt.subplot(1,3,1)
     plt.xlim(0, iter_list[-1]+iter_list[0])
     plt.plot(iter_list, residual_rms, 'go-')
@@ -230,6 +232,12 @@ def residual_plot(residual_variance, residual_entropy, residual_rms, iter_list):
     plt.xlim(0, iter_list[-1]+iter_list[0])
     plt.plot(iter_list, residual_entropy, 'ro-')
     plt.title('Residual entropy')
+    plt.show()
+
+def residual_histogram(residual, title="Histogram of residuals"):
+    plt.figure(figsize=(8,4))
+    plt.hist(residual, facecolor='seagreen', edgecolor='black', lw=2, bins=20)
+    plt.title(title)
     plt.show()
 
 
@@ -398,12 +406,13 @@ def eccentricity_plot(data, xc, yc, sig, wcs=None):
 # 3D only functions
 ########################################################
 
-def cube_plot(data, wcs=None, cmap=plt.cm.cubehelix, unit=None):
-    plt.figure(figsize=(8.5,12))
+def cube_plot(data, wcs=None, cmap=plt.cm.cubehelix, unit=None, freq=None):
+    plt.figure(figsize=(15,10))
+    #plt.subplots_adjust(bottom=0.01)
     if wcs is not None:
-        ax = plt.subplot(311, projection=wcs, slices=("x", 'y', 0))
+        ax = plt.subplot(221, projection=wcs, slices=("x", 'y', 0))
         ax.coords[2].set_major_formatter('x.x')
-        ax.coords[2].set_format_unit(u.GHz)
+        ax.coords[2].set_format_unit(units.GHz)
         ax.set_xlabel(umap[wcs.axis_type_names[0]])
         ax.set_ylabel(umap[wcs.axis_type_names[1]])
     else: ax = plt.subplot(311)
@@ -412,11 +421,10 @@ def cube_plot(data, wcs=None, cmap=plt.cm.cubehelix, unit=None):
     if unit is not None: cbar.set_label("[{0}]".format(unit))
     ax.set_aspect('auto')
 
-    #plt.figure(figsize=(9,9))
     if wcs is not None:
-        ax = plt.subplot(312, projection=wcs, slices=("x",0,"y"))
+        ax = plt.subplot(222, projection=wcs, slices=("x",0,"y"))
         ax.coords[2].set_major_formatter('x.x')
-        ax.coords[2].set_format_unit(u.GHz)
+        ax.coords[2].set_format_unit(units.GHz)
         ax.set_xlabel(umap[wcs.axis_type_names[0]])
         ax.set_ylabel(umap[wcs.axis_type_names[2]])
     else: ax = plt.subplot(312)
@@ -425,11 +433,10 @@ def cube_plot(data, wcs=None, cmap=plt.cm.cubehelix, unit=None):
     if unit is not None: cbar.set_label("[{0}]".format(unit))
     ax.set_aspect('auto')
 
-    #plt.figure(figsize=(9,9))
     if wcs is not None:
-        ax = plt.subplot(313, projection=wcs, slices=(0,"x","y"))
+        ax = plt.subplot(223, projection=wcs, slices=(0,"x","y"))
         ax.coords[2].set_major_formatter('x.x')
-        ax.coords[2].set_format_unit(u.GHz)
+        ax.coords[2].set_format_unit(units.GHz)
         ax.set_xlabel(umap[wcs.axis_type_names[1]])
         ax.set_ylabel(umap[wcs.axis_type_names[2]])
     else: plt.subplot(313)
@@ -438,7 +445,18 @@ def cube_plot(data, wcs=None, cmap=plt.cm.cubehelix, unit=None):
     if unit is not None: cbar.set_label("[{0}]".format(unit))
     ax.set_aspect('auto')
 
-def points_plot3D(points, title=None):
+    if freq is not None:
+        ax = plt.subplot(224)
+        flux = data.sum(axis=(1,2))/data.sum()
+        ax.plot(freq, flux, 'o--', lw=1, color="red", ms=6)
+        ax.xaxis.set_major_formatter(FormatStrFormatter('%.2f'))
+        ax.set_xlabel("FREQ [GHz]")
+        ax.set_ylabel("Standardised flux")
+        ax.grid()
+        ax.set_aspect('auto')
+    plt.show()
+
+def points_plot3d(points, title=None, color="red"):
     x = points[:,0]
     y = points[:,1]
     z = points[:,2]
@@ -446,7 +464,7 @@ def points_plot3D(points, title=None):
     # visualization of points
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
-    ax.scatter(x, y, z, c='r', marker='o', s=7)
+    ax.scatter(x, y, z, c=color, marker='o', s=7)
     ax.set_xlabel('x')
     ax.set_ylabel('y')
     ax.set_zlabel('z')
@@ -465,52 +483,48 @@ def slices_plot(data, slc):
     plt.show()
   
 
-def solution_plot3D(hdmc):
-    # original (stacked) data
-    _data = hdmc.data.sum(axis=0)
-    dmin = _data.min(); dmax = _data.max()
-    _data -= dmin; _data /= dmax
-
-    # approximated solution
-    xc, yc, zc, c, sig = hdmc.get_params_mapped()
-    u = compute_solution(c, sig, xc, yc, zc, hdmc.shape, back_level=hdmc.back_level)
-    _u = u.sum(axis=0)
-    _u -= dmin; _u /= dmax
-
-    # residual
-    res = _data-_u+_u.min()
+def solution_plot_3d(data, u, cmap=plt.cm.cubehelix):
+    plt.figure(figsize=(12,16))
 
     # original data plot
-    plt.figure(figsize=(18,12))
-    plt.subplot(1,3,1)
-    ax = plt.gca()
-    im = ax.imshow(_data, vmin=0., vmax=1., cmap=plt.cm.cubehelix)
-    plt.title('Original')
-    plt.axis('off')
-    divider = make_axes_locatable(ax)
-    cax = divider.append_axes("right", size="5%", pad=0.05)
-    plt.colorbar(im, cax=cax)
-    
-    # approximated solution plot
-    plt.subplot(1,3,2)
-    ax = plt.gca()
-    im = ax.imshow(_u, vmin=0., vmax=1., cmap=plt.cm.cubehelix)
-    plt.title('Solution')
-    plt.axis('off')
-    divider = make_axes_locatable(ax)
-    cax = divider.append_axes("right", size="5%", pad=0.05)
-    plt.colorbar(im, cax=cax)
-    
-    # residual plot
-    plt.subplot(1,3,3)
-    ax = plt.gca()
-    im = ax.imshow(res, vmin=0., vmax=1., cmap=plt.cm.cubehelix)
-    plt.title('Residual')
-    plt.axis('off')
-    divider = make_axes_locatable(ax)
-    cax = divider.append_axes("right", size="5%", pad=0.05)
-    plt.colorbar(im, cax=cax)
+    ax = plt.subplot(3,2,1)
+    im = ax.imshow(data.sum(axis=0), cmap=cmap)
+    cbar = plt.colorbar(im, ax=ax, pad=0.01, aspect=30)
+    #ax.set_aspect('auto')
+    #plt.axis('off')
+
+    ax = plt.subplot(3,2,3)
+    im = ax.imshow(data.sum(axis=1), cmap=cmap)
+    cbar = plt.colorbar(im, ax=ax, pad=0.01, aspect=30)
+    #ax.set_aspect('auto')
+    #plt.axis('off')
+
+    plt.subplot(3,2,5)
+    im = ax.imshow(data.sum(axis=2), cmap=cmap)
+    cbar = plt.colorbar(im, ax=ax, pad=0.01, aspect=30)
+    #ax.set_aspect('auto')  
+    #plt.axis('off')
+
+    # gaussian mixture plot
+    plt.subplot(3,2,2)
+    im = ax.imshow(u.sum(axis=0), cmap=cmap)
+    cbar = plt.colorbar(im, ax=ax, pad=0.01, aspect=30)
+    #ax.set_aspect('auto')
+    #plt.axis('off')
+
+    plt.subplot(3,2,4)
+    im = ax.imshow(u.sum(axis=1), cmap=cmap)
+    cbar = plt.colorbar(im, ax=ax, pad=0.01, aspect=30)
+    #ax.set_aspect('auto')
+    #plt.axis('off')
+
+    plt.subplot(3,2,6)
+    im = ax.imshow(u.sum(axis=2), cmap=cmap)
+    cbar = plt.colorbar(im, ax=ax, pad=0.01, aspect=30)
+    #ax.set_aspect('auto') 
+    #plt.axis('off')
     plt.show()
+
 
 
 def comparative_slices_plot(data1, data2, slc):
