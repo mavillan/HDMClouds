@@ -1,5 +1,4 @@
 import sys
-import warnings
 import numba
 import scipy
 import numpy as np
@@ -9,10 +8,17 @@ import numexpr as ne
 from math import sqrt, exp
 from scipy.interpolate import RegularGridInterpolator
 from sklearn.neighbors import NearestNeighbors
+
 from astropy.io import fits
 from astropy.wcs import WCS
+import astropy.units as units
 from astropy.utils.exceptions import AstropyWarning
+from spectral_cube import SpectralCube
+
+
+import warnings
 warnings.simplefilter('ignore', category=AstropyWarning)
+warnings.filterwarnings("ignore", message="Cube is a Stokes cube, returning spectral cube for I component")
 
 # max int32 value
 ii32 = np.iinfo(np.int32)
@@ -115,8 +121,9 @@ def build_dist_matrix(points, inf=False):
 
         
 def load_data(fits_path):
-    hdu = fits.open(fits_path)[0]
-    data = hdu.data
+    cube = SpectralCube.read(fits_path)
+    hdu = cube.hdu
+    data = cube.base
     wcs = WCS(hdu.header)
 
     if data.ndim>3:
@@ -133,7 +140,10 @@ def load_data(fits_path):
     mask = np.isnan(data)
     if np.any(mask): data = ma.masked_array(data, mask=mask)
 
-    return data,wcs,hdu
+    # computing spectra in case of cubes
+    freq = np.array((cube.spectral_axis).to(units.GHz))[::-1]
+
+    return data,wcs,hdu,freq
 
 
 def sig_mapping(sig, minsig=0., maxsig=1.):
