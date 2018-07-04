@@ -10,7 +10,7 @@ MAXINT = ii32.max
 # HELPER FUNCTIONS
 ################################################################
 
-@numba.jit('float64[:,:] (float64[:], float64[:])', nopython=True, nogil=True)
+@numba.jit('float64[:,:] (float64[:], float64[:])', nopython=True, nogil=True, cache=True)
 def _outer(x, y):
     """
     Computes the outer production between 1d-ndarrays x and y.
@@ -24,7 +24,7 @@ def _outer(x, y):
     return res
 
 
-@numba.jit('float64 (float64[:,:])', nopython=True, nogil=True)
+@numba.jit('float64 (float64[:,:])', nopython=True, nogil=True, cache=True)
 def _det(X):
     """
     Direct computation of determinant for matrices of size 2x2 and 3x3
@@ -39,7 +39,7 @@ def _det(X):
 
 
 
-@numba.jit('float64 (float64[:], float64[:], float64[:,:])', nopython=True, nogil=True)
+@numba.jit('float64 (float64[:], float64[:], float64[:,:])', nopython=True, nogil=True, cache=True)
 def normal(x, mu, cov):
     """
     Normal distribution with parameters mu (mean) and cov (covariance matrix)
@@ -77,7 +77,7 @@ def ncomp_finder(kl_hist, w_size=10):
 
 
 @numba.jit('Tuple((float64, float64[:], float64[:,:])) (float64, float64[:], \
-            float64[:,:], float64, float64[:], float64[:,:])', nopython=True, nogil=True)
+            float64[:,:], float64, float64[:], float64[:,:])', nopython=True, nogil=True, cache=True)
 def merge(w1, mu1, cov1, w2, mu2, cov2):
     """
     Computes the moment preserving merge of components (w1,mu1,cov1) and
@@ -90,7 +90,7 @@ def merge(w1, mu1, cov1, w2, mu2, cov2):
 
 
 @numba.jit('Tuple((float64, float64[:], float64[:,:])) (float64, float64[:], \
-            float64[:,:], float64, float64[:], float64[:,:])', nopython=True)
+            float64[:,:], float64, float64[:], float64[:,:])', nopython=True, nogil=True, cache=True)
 def isomorphic_merge(w1, mu1, cov1, w2, mu2, cov2):
     """
     Computes the isomorphic moment preserving merge of components (w1,mu1,cov1) and
@@ -105,7 +105,7 @@ def isomorphic_merge(w1, mu1, cov1, w2, mu2, cov2):
 
 
 @numba.jit('Tuple((float64, float64[:], float64[:,:])) (float64[:], \
-            float64[:,:], float64[:,:,:])', nopython=True)
+            float64[:,:], float64[:,:,:])', nopython=True, nogil=True, cache=True)
 def merge_full(w, mu, cov):
     n = mu.shape[0]
     d = mu.shape[1]
@@ -127,7 +127,7 @@ def merge_full(w, mu, cov):
 
 
 
-@numba.jit('float64 (float64, float64[:], float64[:,:], float64, float64[:], float64[:,:])', nopython=True, nogil=True)
+@numba.jit('float64 (float64, float64[:], float64[:,:], float64, float64[:], float64[:,:])', nopython=True, nogil=True, cache=True)
 def KLdiv(w1, mu1, cov1, w2, mu2, cov2):
     """
     Computation of the KL-divergence (dissimilarity) upper bound between components 
@@ -139,7 +139,7 @@ def KLdiv(w1, mu1, cov1, w2, mu2, cov2):
 
 
 
-@numba.jit('float64 (float64, float64[:], float64[:,:], float64, float64[:], float64[:,:])', nopython=True)
+@numba.jit('float64 (float64, float64[:], float64[:,:], float64, float64[:], float64[:,:])', nopython=True, nogil=True, cache=True)
 def isd_diss(w1, mu1, cov1, w2, mu2, cov2):
     """
     Computes the ISD (Integral Square Difference between components [(w1,mu1,cov1), (w2,mu2,cov2)])
@@ -155,7 +155,7 @@ def isd_diss(w1, mu1, cov1, w2, mu2, cov2):
 
 
 
-@numba.jit('float64 (float64[:], float64[:,:], float64[:,:,:])', nopython=True)
+@numba.jit('float64 (float64[:], float64[:,:], float64[:,:,:])', nopython=True, nogil=True, cache=True)
 def isd_diss_full(w, mu, sig):
     # number of components
     c = len(w)
@@ -195,7 +195,7 @@ def _compute_neighbors(mu_center, maxsig):
 
 
 
-@numba.jit('float64[:,:] (float64[:], float64[:,:], float64[:,:,:], int32[:,:])', nopython=True, parallel=True)
+@numba.jit('float64[:,:] (float64[:], float64[:,:], float64[:,:,:], int32[:,:])', nopython=True, nogil=True, parallel=True)
 def build_diss_matrix(w, mu, cov, nn_indexes):
     M,max_neigh = nn_indexes.shape
     diss_matrix = np.inf*np.ones((M,max_neigh))
@@ -203,17 +203,39 @@ def build_diss_matrix(w, mu, cov, nn_indexes):
         for j in range(max_neigh):
             jj = nn_indexes[i,j]
             if jj==MAXINT: break
-            diss_matrix[i,j] = KLdiv(w[i],mu[i],cov[i],w[jj],mu[jj],cov[jj])  
+            diss_matrix[i,j] = KLdiv(w[i],mu[i],cov[i],w[jj],mu[jj],cov[jj])
+        sorted_indexes = np.argsort(diss_matrix[i,:])
+        diss_matrix[i,:] = (diss_matrix[i,:])[sorted_indexes]
+        nn_indexes[i,:] = (nn_indexes[i,:])[sorted_indexes]
     return diss_matrix
 
 
 
-@numba.jit('Tuple((int32,int32)) (float64[:,:], int32[:], int32[:,:])', nopython=True)
-def least_dissimilar(diss_matrix, indexes, nn_indexes):
+# @numba.jit('Tuple((int32,int32)) (float64[:,:], int32[:], int32[:,:])', nopython=True, cache=True)
+# def less_dissimilar(diss_matrix, indexes, nn_indexes):
+#     num_comp = indexes.shape[0]
+#     max_neigh = diss_matrix.shape[1]
+#     i_min = -1; j_min = -1
+#     diss_min = np.inf
+#     for _i in range(num_comp):
+#         i = indexes[_i]
+#         for j in range(max_neigh):
+#             if diss_matrix[i,j]==-1: continue
+#             if diss_matrix[i,j]==np.inf: break
+#             if diss_matrix[i,j]<diss_min:
+#                 diss_min = diss_matrix[i,j]
+#                 i_min = i
+#                 j_min = nn_indexes[i,j]
+#     return i_min,j_min
+
+@numba.jit('Tuple((int32,int32)) (float64[:,:], int32[:], int32[:,:])', nopython=True, cache=True)
+def less_dissimilar(diss_matrix, indexes, nn_indexes):
+    num_comp = indexes.shape[0]
     max_neigh = diss_matrix.shape[1]
     i_min = -1; j_min = -1
     diss_min = np.inf
-    for i in indexes:
+    for _i in range(num_comp):
+        i = indexes[_i]
         for j in range(max_neigh):
             if diss_matrix[i,j]==-1: continue
             if diss_matrix[i,j]==np.inf: break
@@ -221,10 +243,11 @@ def least_dissimilar(diss_matrix, indexes, nn_indexes):
                 diss_min = diss_matrix[i,j]
                 i_min = i
                 j_min = nn_indexes[i,j]
+            break
     return i_min,j_min
 
 
-@numba.jit('int32 (int32[:], int32)', nopython=True)
+@numba.jit('int32 (int32[:], int32)', nopython=True, nogil=True, cache=True)
 def get_index(array, value):
     n = len(array)
     for i in range(n):
@@ -232,7 +255,7 @@ def get_index(array, value):
     return -1
 
 
-@numba.jit('(int32[:], int32, int32)', nopython=True)
+@numba.jit('(int32[:], int32, int32)', nopython=True, nogil=True, cache=True)
 def update_merge_mapping(merge_mapping, nindex, dindex):
     n = len(merge_mapping)
     for i in range(n):
@@ -283,12 +306,16 @@ def update_structs(nn_indexes, diss_matrix, w, mu, cov, indexes, nindex, dindex)
         else:
             diss_matrix[nindex,j] = np.inf
 
+    sorted_indexes = np.argsort(diss_matrix[nindex,:])
+    diss_matrix[nindex,:] = (diss_matrix[nindex,:])[sorted_indexes]
+    nn_indexes[nindex,:] = (nn_indexes[nindex,:])[sorted_indexes]
+
 
 ################################################################
 # MAIN FUNCTION
 ################################################################
 
-def mixture_reduction(w, mu, cov, n_comp, verbose=True):
+def mixture_reduction(w, mu, cov, n_comp, k_sig=2, verbose=True):
     """
     Gaussian Mixture Reduction Through KL-upper bound approach
     """
@@ -303,13 +330,13 @@ def mixture_reduction(w, mu, cov, n_comp, verbose=True):
     # dimensionality of data
     d = mu.shape[1]
 
-    # we consider neighbors at a radius equivalent to the lenght of 5 pixels
+    # we consider neighbors at a radius equivalent to the lenght of k_sigma*sigma_max
     if cov.ndim==1:
-        maxsig = 5*np.max(cov)
+        maxsig = k_sig*np.max(cov)
         # if cov is 1-dimensional we convert it to its covariance matrix form
         cov = np.asarray( [(val**2)*np.identity(d) for val in cov] )
     else:
-        maxsig = 5*max([np.max(np.linalg.eig(_cov)[0])**(1./2) for _cov in cov])
+        maxsig = k_sig*max([np.max(np.linalg.eig(_cov)[0])**(1./2) for _cov in cov])
 
     indexes = np.arange(M, dtype=np.int32)
     nn,nn_indexes = _compute_neighbors(mu,maxsig)
@@ -321,11 +348,12 @@ def mixture_reduction(w, mu, cov, n_comp, verbose=True):
     max_neigh = nn_indexes.shape[1]
     
     # computing the initial dissimilarity matrix
-    diss_matrix = build_diss_matrix(w, mu, cov, nn_indexes)  
+    diss_matrix = build_diss_matrix(w, mu, cov, nn_indexes)
+    print(diss_matrix.shape)
     
     # main loop
     while M>N:
-        i_min, j_min = least_dissimilar(diss_matrix, indexes, nn_indexes)
+        i_min,j_min = less_dissimilar(diss_matrix, indexes, nn_indexes)
         if verbose: print('Merged components {0} and {1}'.format(i_min, j_min))  
         w_m, mu_m, cov_m = merge(w[i_min], mu[i_min], cov[i_min], 
                                  w[j_min], mu[j_min], cov[j_min])
