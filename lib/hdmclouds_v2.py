@@ -53,7 +53,7 @@ def d1psi1(x, lamb=1.):
 # HDMClouds class definition
 #################################################################
 class HDMClouds():
-    def __init__(self, data, alpha=0., lamb=1., n_center=200, back_level=None,
+    def __init__(self, data, freq=None, alpha=0., lamb=1., n_center=200, back_level=None,
         minsig=None, maxsig=None, pix_freedom=1., verbose=False, wcs=None):
 
         #############################################################
@@ -90,6 +90,7 @@ class HDMClouds():
             dfunc = RegularGridInterpolator((x, y, z), data, method='linear', bounds_error=False, fill_value=0.)
 
         self.data = data
+        self.freq = freq
         self.mask = mask
         self.dims = data.shape
         self.vmin = vmin

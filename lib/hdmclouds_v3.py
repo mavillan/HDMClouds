@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import graph as gp
 from utils import *
 from points_generation import *
-from preprocessing import *
+from preprocessing import * 
 from gmr import *
 from fgm_eval import *
 
@@ -68,24 +68,16 @@ class HDMClouds():
         data -= vmin
         data /= vmax-vmin
         data[~mask] = 0
-    
-        if data.ndim==2:
-            # generating the data function
-            _x = np.linspace(0., 1., data.shape[0]+1, endpoint=True)
-            _y = np.linspace(0., 1., data.shape[1]+1, endpoint=True)
-            _xe = np.asarray( [(_x[i]+_x[i+1])/2 for i in range(len(_x)-1)] )
-            _ye = np.asarray( [(_y[i]+_y[i+1])/2 for i in range(len(_y)-1)] )
-            dfunc = RegularGridInterpolator((_xe,_ye), data, method='linear', bounds_error=False, fill_value=0.)
 
-        elif data.ndim==3:
-            # generating the data function
-            _x = np.linspace(0., 1., data.shape[0]+1, endpoint=True)
-            _y = np.linspace(0., 1., data.shape[1]+1, endpoint=True)
-            _z = np.linspace(0., 1., data.shape[2]+1, endpoint=True)
-            _xe = np.asarray( [(_x[i]+_x[i+1])/2 for i in range(len(_x)-1)] )
-            _ye = np.asarray( [(_y[i]+_y[i+1])/2 for i in range(len(_y)-1)] )
-            _ze = np.asarray( [(_z[i]+_z[i+1])/2 for i in range(len(_z)-1)] )
-            dfunc = RegularGridInterpolator((_xe, _ye, _ze), data, method='linear', bounds_error=False, fill_value=0.)
+
+        # generating the data function
+        _x = np.linspace(0., 1., data.shape[0]+1, endpoint=True)
+        _y = np.linspace(0., 1., data.shape[1]+1, endpoint=True)
+        _z = np.linspace(0., 1., data.shape[2]+1, endpoint=True)
+        _xe = np.asarray( [(_x[i]+_x[i+1])/2 for i in range(len(_x)-1)] )
+        _ye = np.asarray( [(_y[i]+_y[i+1])/2 for i in range(len(_y)-1)] )
+        _ze = np.asarray( [(_z[i]+_z[i+1])/2 for i in range(len(_z)-1)] )
+        dfunc = RegularGridInterpolator((_xe, _ye, _ze), data, method='linear', bounds_error=False, fill_value=0.)
 
         self.data = data
         self.freq = freq
@@ -100,8 +92,8 @@ class HDMClouds():
         # Verification of consistency between n_center and number of significant emission pixels
         npix = np.sum(mask)
         print("[INFO] Number of usable pixels: {0}".format(npix))
-        if 2*n_center > npix:
-            n_center = npix//2
+        if 3*n_center > npix:
+            n_center = npix//3
             print("[WARNING] The number of evaluation points (2*n_center) cannot"
                   "be greater than the number of significant emission pixels: {0}".format(npix))
             print("[WARNING] n_center was set to: {0}".format(n_center))
@@ -109,19 +101,12 @@ class HDMClouds():
         #######################################
         # Evaluation regular-grid points
         #######################################
-        if self.ndim==2:
-            Xe,Ye = np.meshgrid(_xe, _ye, sparse=False, indexing='ij')
-            xgrid = Xe.ravel(); ygrid = Ye.ravel()
-            self.xgrid = xgrid
-            self.ygrid = ygrid
-            grid_points = np.vstack([xgrid,ygrid]).T
-        if self.ndim==3:
-            Xe,Ye,Ze = np.meshgrid(_xe, _ye, _ze, sparse=False, indexing='ij')
-            xgrid = Xe.ravel(); ygrid = Ye.ravel(); zgrid = Ze.ravel()
-            self.xgrid = xgrid
-            self.ygrid = ygrid
-            self.zgrid = zgrid
-            grid_points = np.vstack([xgrid,ygrid,zgrid]).T
+        Xe,Ye,Ze = np.meshgrid(_xe, _ye, _ze, sparse=False, indexing='ij')
+        xgrid = Xe.ravel(); ygrid = Ye.ravel(); zgrid = Ze.ravel()
+        self.xgrid = xgrid
+        self.ygrid = ygrid
+        self.zgrid = zgrid
+        grid_points = np.vstack([xgrid,ygrid,zgrid]).T
 
 
         #######################################
@@ -141,64 +126,31 @@ class HDMClouds():
         # initial w
         w = (data[mask]).astype(np.float64)
 
-        if self.ndim==2:
-            # initial mu
-            xc = Xe[mask]; yc = Ye[mask]
-            mu = np.vstack([xc,yc]).T
-            # initial sigma
-            k = 0.25
-            pix_lenght = sum([1./data.shape[0], 1./data.shape[1]])/2.
-            sig = (pix_lenght/(2.*k))*np.ones(w.shape[0])
-
-            # # normalizing w
-            # center_points = np.vstack([xc,yc]).T
-            # neigh_indexes,neigh_indexes_aux = compute_neighbors(center_points, grid_points, 5*sig[0])
-            # u = gm_eval2d_2(w, sig, xc, yc, xgrid, ygrid, neigh_indexes, neigh_indexes_aux)
-            # w *= data.max()/u.max()
-
-        if self.ndim==3:
-            # initial mu
-            xc = Xe[mask]; yc = Ye[mask]; zc = Ze[mask]
-            mu = np.vstack([xc,yc,zc]).T
-            # initial sigma
-            k = 0.25
-            pix_lenght = sum([1./data.shape[0], 1./data.shape[1], 1./data.shape[2]])/3.
-            sig = (pix_lenght/(2.*k))*np.ones(w.shape[0])
-
-            # # normalizing w
-            # center_points = np.vstack([xc,yc,zc]).T
-            # neigh_indexes,neigh_indexes_aux = compute_neighbors(center_points, grid_points, 5*sig[0])
-            # u = gm_eval3d_2(w, sig, xc, yc, zc, xgrid, ygrid, zgrid, neigh_indexes, neigh_indexes_aux)
-            # w *= data.max()/u.max()
-
+        # initial mu
+        xc = Xe[mask]; yc = Ye[mask]; zc = Ze[mask]
+        mu = np.vstack([xc,yc,zc]).T
+        # initial sigma
+        k = 0.25
+        pix_lenght = sum([1./data.shape[0], 1./data.shape[1], 1./data.shape[2]])/3.
+        sig = (pix_lenght/(2.*k))*np.ones(w.shape[0])
 
         # agglomeration
-        w_red,mu_red,cov_red = mixture_reduction(w, mu, sig, 2*n_center, verbose=False)
+        w_red,mu_red,cov_red = mixture_reduction(w, mu, sig, 3*n_center, verbose=False)
 
         # evaluation points
-        if self.ndim==2:
-            xe = mu_red[:,0]
-            ye = mu_red[:,1]
-            eval_points = np.vstack([xe,ye]).T
-        if self.ndim==3:
-            xe = mu_red[:,0]
-            ye = mu_red[:,1]
-            ze = mu_red[:,2]
-            eval_points = np.vstack([xe,ye,ze]).T
+        xe = mu_red[:,0]
+        ye = mu_red[:,1]
+        ze = mu_red[:,2]
+        eval_points = np.vstack([xe,ye,ze]).T
 
         # agglomeration must go on
         w_red,mu_red,cov_red = mixture_reduction(w_red, mu_red, cov_red, n_center, verbose=False)
 
         # gaussian center points
-        if self.ndim==2:
-            xc = mu_red[:,0]
-            yc = mu_red[:,1]
-            center_points = np.vstack([xc,yc]).T
-        if self.ndim==3:
-            xc = mu_red[:,0]
-            yc = mu_red[:,1]
-            zc = mu_red[:,2]
-            center_points = np.vstack([xc,yc,zc]).T
+        xc = mu_red[:,0]
+        yc = mu_red[:,1]
+        zc = mu_red[:,2]
+        center_points = np.vstack([xc,yc,zc]).T
 
         # covariance matrix truncation
         if ig_method=="determinant":
@@ -206,14 +158,10 @@ class HDMClouds():
         elif ig_method=="eigenvalue":
             sig_red = np.asarray( [np.mean((np.linalg.eig(cov)[0]))**(1./2) for cov in cov_red] )
 
-        if verbose:
+        #if verbose:
             # visualizing the choosen points
-            if self.ndim==2:
-                gp.points_plot(data, points=center_points, color="red", wcs=wcs)
-                gp.points_plot(data, points=eval_points, color="blue", wcs=wcs)
-            #if self.ndim==3:
-                #gp.points_plot3d(center_points, color="red")
-                #gp.points_plot3d(eval_points, color="blue")
+            #gp.points_plot3d(center_points, color="red")
+            #gp.points_plot3d(eval_points, color="blue")
 
 
         #################################################
@@ -238,32 +186,18 @@ class HDMClouds():
         #############################################################
         # Normalizing the weights "w" from the IG Gaussian Mixture
         #############################################################
-        if self.ndim==2:
-            # normalizing w
-            u = gm_eval2d_2(w_red, sig_red, xc, yc, xgrid, ygrid, self.nind3, self.nind_aux3)
-            w_red *= data.max()/u.max()
-
-        if self.ndim==3:
-            # normalizing w
-            u = gm_eval3d_2(w_red, sig_red, xc, yc, zc, xgrid, ygrid, zgrid, self.nind3, self.nind_aux3)
-            w_red *= data.max()/u.max()
+        u = gm_eval3d_2(w_red, sig_red, xc, yc, zc, xgrid, ygrid, zgrid, self.nind3, self.nind_aux3)
+        w_red *= data.max()/u.max()
 
 
         ########################################
         # HDMClouds internals
         ########################################
-        if self.ndim==2:
-            self.f0 = dfunc( np.vstack([xe,ye]).T )
-            #self.fb = dfunc( np.vstack([xb,yb]).T )
-        if self.ndim==3:
-            self.f0 = dfunc( np.vstack([xe,ye,ze]).T )
-            #self.fb = dfunc( np.vstack([xb,yb,zb]).T )
-        self.xc = xc; self.yc = yc 
-        if self.ndim==3: self.zc = zc
-        #self.xb = xb; self.yb = yb
-        #if self.ndim==3: self.zb = zb
-        self.xe = xe; self.ye = ye
-        if self.ndim==3: self.ze = ze
+        self.f0 = dfunc( np.vstack([xe,ye,ze]).T )
+        #self.fb = dfunc( np.vstack([xb,yb,zb]).T )
+        self.xc = xc; self.yc = yc; self.zc = zc
+        #self.xb = xb; self.yb = yb; self.zb = zb
+        self.xe = xe; self.ye = ye; self.ze = ze
         self.minsig = minsig
         self.maxsig = maxsig
         self.kappa = kappa
@@ -272,7 +206,9 @@ class HDMClouds():
         self.w = np.sqrt(w_red)
         self.w0 = np.copy(w_red)
         self.sig = inv_sig_mapping(sig_red+epsilon, minsig, maxsig)
+        self.sigf = inv_sig_mapping(sig_red+epsilon, minsig, maxsig)
         self.sig0 = np.copy(sig_red)
+        self.sigf0 = np.copy(sig_red)
         ##########################
         self.d1psi1 = d1psi1
         self.alpha = alpha
@@ -286,20 +222,22 @@ class HDMClouds():
     def set_w(self, w):
         self.w = w
 
-    def set_sig(self, sig):
+    def set_sig(self, sig, sigf):
         self.sig = sig
+        self.sigf = sigf
 
     def set_params(self, params):
-        N = len(params)//2
+        N = len(params)//3
         self.w = params[0:N]
-        self.sig = params[N:]
+        self.sig = params[N:2*N]
+        self.sigf = params[2*N:]
 
     def get_params(self):
         """
         Get the parameter of the function F (to optimize): 
         theta_xc, theta_yc, c, sig
         """
-        return np.concatenate([self.w, self.sig])
+        return np.concatenate([self.w, self.sig, self.sigf])
 
 
     def get_params_mapped(self):
@@ -311,7 +249,8 @@ class HDMClouds():
         #yc = self.yc0 + self.deltay * np.sin(self.theta_yc)
         w = self.w**2
         sig = sig_mapping(self.sig, self.minsig, self.maxsig)
-        return w,sig
+        sigf = sig_mapping(self.sigf, self.minsig, self.maxsig)
+        return w,sig,sigf
 
 
     def normalized_w(self):
@@ -320,18 +259,15 @@ class HDMClouds():
         combination of Gausssian functions, to the 'w' in the
         linear combination of Normal functions. 
         """
-        w,sig = self.get_params_mapped()
+        w,sig,sifg = self.get_params_mapped()
         d = self.ndim
         w = w * (2*np.pi*sig**2)**(d/2.)
         return w
 
 
     def get_approximation(self):
-        w,sig = self.get_params_mapped()
-        if self.ndim==2:
-            u = gm_eval2d_2(w, sig, self.xc, self.yc, self.xgrid, self.ygrid, self.nind3, self.nind_aux3)
-        if self.ndim==3:
-            u = gm_eval3d_2(w, sig, self.xc, self.yc, self.zc, self.xgrid, self.ygrid, self.zgrid, self.nind3, self.nind_aux3)
+        w,sig,sigf = self.get_params_mapped()
+        u = gm_eval3d_3(w, sig, sigf, self.xc, self.yc, self.zc, self.xgrid, self.ygrid, self.zgrid, self.nind3, self.nind_aux3)
         u = u.reshape(self.shape)
         return u
 
@@ -345,11 +281,7 @@ class HDMClouds():
             residual = self.data-u
 
         # visualization original data, u and residual
-        if plot and self.ndim==2:
-            gp.solution_plot(self.data, u, residual)
-            gp.residual_histogram(residual[self.mask])
-
-        if plot and self.ndim==3:
+        if plot:
             print("-"*118)
             print("ORIGINAL DATA")
             gp.cube_plot(self.data, wcs=self.wcs, freq=self.freq)
@@ -433,17 +365,15 @@ class HDMClouds():
 
             
     def F(self, params):
-        N = len(params)//2
+        N = len(params)//3
 
         # parameters transform/mapping
         w = params[0:N]**2
-        sig = sig_mapping(params[N:], self.minsig, self.maxsig)
+        sig = sig_mapping(params[N:2*N], self.minsig, self.maxsig)
+        sigf = sig_mapping(params[2*N:], self.minsig, self.maxsig)
         
         # computing the EL equation
-        if self.ndim==2:
-            u = gm_eval2d_2(w, sig, self.xc, self.yc, self.xe, self.ye, self.nind1, self.nind_aux1)
-        if self.ndim==3:
-            u = gm_eval3d_2(w, sig, self.xc, self.yc, self.zc, self.xe, self.ye, self.ze, self.nind1, self.nind_aux1)
+        u = gm_eval3d_3(w, sig, sigf, self.xc, self.yc, self.zc, self.xe, self.ye, self.ze, self.nind1, self.nind_aux1)
 
         # evaluation of the EL equation
         f0 = self.f0
@@ -455,10 +385,7 @@ class HDMClouds():
         # evaluating at the boundary
         #fb = self.fb
         #u_boundary = gm_eval_fast(w, sig, self.xc, self.yc, self.xb, self.yb, self.nind2, self.nind_aux2)
-        #if self.ndim==2:
-        #    u_boundary = gm_eval2d_1(w, sig, self.xc, self.yc, self.xb, self.yb)
-        #if self.ndim==3:
-        #    u_boundary = gm_eval3d_1(w, sig, self.xc, self.yc, self.zc, self.xb, self.yb, self.zb)
+        #u_boundary = gm_eval3d_1(w, sig, self.xc, self.yc, self.zc, self.xb, self.yb, self.zb)
         
         #return np.concatenate([el,u_boundary-fb])
         return el
@@ -483,13 +410,14 @@ class HDMClouds():
                 self.scipy_tol = tol
                 break
             tol /= 10
-        sol_length = len(sol.x)//2
+        sol_length = len(sol.x)//3
         opt_w = sol.x[0:sol_length]
-        opt_sig = sol.x[sol_length:]
+        opt_sig = sol.x[sol_length:2*sol_length]
+        opt_sigf = sol.x[2*sol_length:]
 
         # update to best parameters
         self.set_w(opt_w)
-        self.set_sig(opt_sig)
+        self.set_sig(opt_sig, opt_sigf)
 
         # prune of gaussians from mixture
         #self.prune()
