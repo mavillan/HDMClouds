@@ -253,13 +253,18 @@ def points_plot(data, points=None, color=None, wcs=None,
     title : string with title of the plot
     save_path : string with the path where to save the image
     """
-    x_scale = data.shape[0]-1
-    y_scale = data.shape[1]-1
+    pix_lenght = 1./max(data.shape)
     fig = plt.figure(figsize=(10,10))
     if wcs is not None: fig.gca(projection=wcs)
-    plt.imshow(data, cmap=cmap)
-    plt.scatter(points[:,1]*y_scale, points[:,0]*x_scale, s=20, 
-                facecolor=color, lw=0, alpha=0.9)
+    # we first plot the data image
+    interval = AsymmetricPercentileInterval(0.25, 99.75, n_samples=100000)
+    vmin, vmax = interval.get_limits(data)
+    vmin = -0.1*(vmax-vmin) + vmin
+    vmax = 0.1*(vmax-vmin) + vmax
+    im = plt.imshow(data, cmap=cmap, interpolation=None, vmin=vmin, vmax=vmax)
+    # and the we superimpose the points
+    plt.scatter((points[:,1]-pix_lenght/2.)/pix_lenght, (points[:,0]-pix_lenght/2.)/pix_lenght, 
+                s=20, facecolor=color, lw=0, alpha=0.9)
     #plt.legend(loc=4, prop={'size': 20})  
     plt.grid()
     ax = plt.gca()
