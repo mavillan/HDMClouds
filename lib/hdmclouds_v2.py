@@ -73,17 +73,17 @@ class HDMClouds():
     
         if data.ndim==2:
             # generating the data function
-            _x = np.linspace(0., 1., data.shape[0]+1, endpoint=True)
-            _y = np.linspace(0., 1., data.shape[1]+1, endpoint=True)
+            _x = data.shape[0]/max(data.shape) * np.linspace(0., 1., data.shape[0]+1, endpoint=True)
+            _y = data.shape[1]/max(data.shape) * np.linspace(0., 1., data.shape[1]+1, endpoint=True)
             x = np.asarray( [(_x[i]+_x[i+1])/2 for i in range(len(_x)-1)] )
             y = np.asarray( [(_y[i]+_y[i+1])/2 for i in range(len(_y)-1)] )
             dfunc = RegularGridInterpolator((x,y), data, method='linear', bounds_error=False, fill_value=0.)
 
         elif data.ndim==3:
             # generating the data function
-            _x = np.linspace(0., 1., data.shape[0]+1, endpoint=True)
-            _y = np.linspace(0., 1., data.shape[1]+1, endpoint=True)
-            _z = np.linspace(0., 1., data.shape[2]+1, endpoint=True)
+            _x = data.shape[0]/max(data.shape) * np.linspace(0., 1., data.shape[0]+1, endpoint=True)
+            _y = data.shape[1]/max(data.shape) * np.linspace(0., 1., data.shape[1]+1, endpoint=True)
+            _z = data.shape[2]/max(data.shape) * np.linspace(0., 1., data.shape[2]+1, endpoint=True)
             x = np.asarray( [(_x[i]+_x[i+1])/2 for i in range(len(_x)-1)] )
             y = np.asarray( [(_y[i]+_y[i+1])/2 for i in range(len(_y)-1)] )
             z = np.asarray( [(_z[i]+_z[i+1])/2 for i in range(len(_z)-1)] )
