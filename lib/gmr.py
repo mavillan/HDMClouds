@@ -155,22 +155,22 @@ def isd_diss(w1, mu1, cov1, w2, mu2, cov2):
 
 
 
-@numba.jit('float64 (float64[:], float64[:,:], float64[:,:,:])', nopython=True, nogil=True, cache=True)
-def isd_diss_full(w, mu, sig):
-    # number of components
-    c = len(w)
-    # merged moment preserving gaussian
-    w_m, mu_m, sig_m = merge_full(w, mu, sig)
-    # ISD computation between merge and components
-    Jhr = 0.
-    Jrr = w_m**2 * (1./np.sqrt((2*np.pi)**2 * np.linalg.det(2*sig_m)))
-    Jhh = 0.
-    for i in range(c):  
-        Jhr += w[i]*w_m * normal(mu[i], mu_m, sig[i]+sig_m)   
-    for i in range(c):
-        for j in range(c):
-            Jhh += w[i]*w[j] * normal(mu[i], mu[j], sig[i]+sig[j])
-    return Jhh - 2*Jhr + Jrr
+# @numba.jit('float64 (float64[:], float64[:,:], float64[:,:,:])', nopython=True, nogil=True, cache=True)
+# def isd_diss_full(w, mu, sig):
+#     # number of components
+#     c = len(w)
+#     # merged moment preserving gaussian
+#     w_m, mu_m, sig_m = merge_full(w, mu, sig)
+#     # ISD computation between merge and components
+#     Jhr = 0.
+#     Jrr = w_m**2 * (1./np.sqrt((2*np.pi)**2 * np.linalg.det(2*sig_m)))
+#     Jhh = 0.
+#     for i in range(c):  
+#         Jhr += w[i]*w_m * normal(mu[i], mu_m, sig[i]+sig_m)   
+#     for i in range(c):
+#         for j in range(c):
+#             Jhh += w[i]*w[j] * normal(mu[i], mu[j], sig[i]+sig[j])
+#     return Jhh - 2*Jhr + Jrr
 
 
 
@@ -210,26 +210,9 @@ def build_diss_matrix(w, mu, cov, nn_indexes):
     return diss_matrix
 
 
-
-# @numba.jit('Tuple((int32,int32)) (float64[:,:], int32[:], int32[:,:])', nopython=True, cache=True)
-# def less_dissimilar(diss_matrix, indexes, nn_indexes):
-#     num_comp = indexes.shape[0]
-#     max_neigh = diss_matrix.shape[1]
-#     i_min = -1; j_min = -1
-#     diss_min = np.inf
-#     for _i in range(num_comp):
-#         i = indexes[_i]
-#         for j in range(max_neigh):
-#             if diss_matrix[i,j]==-1: continue
-#             if diss_matrix[i,j]==np.inf: break
-#             if diss_matrix[i,j]<diss_min:
-#                 diss_min = diss_matrix[i,j]
-#                 i_min = i
-#                 j_min = nn_indexes[i,j]
-#     return i_min,j_min
-
 @numba.jit('Tuple((int32,int32)) (float64[:,:], int32[:], int32[:,:])', nopython=True, cache=True)
-def less_dissimilar(diss_matrix, indexes, nn_indexes):
+def least_dissimilar(diss_matrix, indexes, nn_indexes):
+    # number of mixture components still alive
     num_comp = indexes.shape[0]
     max_neigh = diss_matrix.shape[1]
     i_min = -1; j_min = -1
@@ -264,7 +247,9 @@ def update_merge_mapping(merge_mapping, nindex, dindex):
 
 
 @numba.jit()
-def radius_search(nn, mu, max_neigh, merge_mapping, nindex):
+def radius_search(nn, mu, max_neigh, merge_mapping, nindex, rho):
+    if rho is not None:
+        nn.radius *= rho
     neigh_array = nn.radius_neighbors([mu], return_distance=False)[0]
     neigh_array = merge_mapping[neigh_array]
     neigh_array = np.unique(neigh_array)
@@ -273,7 +258,7 @@ def radius_search(nn, mu, max_neigh, merge_mapping, nindex):
         neigh_array = nn.kneighbors([mu], n_neighbors=max_neigh, return_distance=False)[0]
         neigh_array = merge_mapping[neigh_array]
         neigh_array = np.unique(neigh_array)
-    # removing nindex and dindex from neighbors
+    # removing nindex from neighbors
     neigh_array = np.delete(neigh_array, get_index(neigh_array,nindex))
     ret = MAXINT*np.ones(max_neigh, dtype=np.int32)
     ret[0:len(neigh_array)] = neigh_array
@@ -286,6 +271,7 @@ def update_structs(nn_indexes, diss_matrix, w, mu, cov, indexes, nindex, dindex)
     Updates the nn_indexes and diss_matrix structs by removing the items
     corresponding to nindex and dindex
     """
+    # number of mixture components still alive
     num_comp = len(indexes)
     max_neigh = nn_indexes.shape[1]
     for _i in numba.prange(num_comp):
@@ -315,7 +301,69 @@ def update_structs(nn_indexes, diss_matrix, w, mu, cov, indexes, nindex, dindex)
 # MAIN FUNCTION
 ################################################################
 
-def mixture_reduction(w, mu, cov, n_comp, k_sig=2, verbose=True):
+# def mixture_reduction(w, mu, cov, n_comp, k_sig=2, verbose=True):
+#     """
+#     Gaussian Mixture Reduction Through KL-upper bound approach
+#     """
+#     w = np.copy(w)
+#     mu = np.copy(mu)
+#     cov = np.copy(cov)
+
+#     # original size of the mixture
+#     M = len(w) 
+#     # target size of the mixture
+#     N = n_comp
+#     # dimensionality of data
+#     d = mu.shape[1]
+
+#     # we consider neighbors at a radius equivalent to the lenght of k_sigma*sigma_max
+#     if cov.ndim==1:
+#         maxsig = k_sig*np.max(cov)
+#         # if cov is 1-dimensional we convert it to its covariance matrix form
+#         cov = np.asarray( [(sig**2)*np.identity(d) for sig in cov] )
+#     else:
+#         maxsig = k_sig*max([np.max(np.linalg.eig(_cov)[0])**(1./2) for _cov in cov])
+
+#     indexes = np.arange(M, dtype=np.int32)
+#     nn,nn_indexes = _compute_neighbors(mu,maxsig)
+
+#     # idea: keep track that the k-th component was merged into the l-th positon
+#     merge_mapping = np.arange(M, dtype=np.int32)
+
+#     # max number of neighbors
+#     max_neigh = nn_indexes.shape[1]
+    
+#     # computing the initial dissimilarity matrix
+#     diss_matrix = build_diss_matrix(w, mu, cov, nn_indexes)
+    
+#     # main loop
+#     while M>N:
+#         i_min,j_min = least_dissimilar(diss_matrix, indexes, nn_indexes)
+#         if verbose: print('Merged components {0} and {1}'.format(i_min, j_min))  
+#         w_m, mu_m, cov_m = merge(w[i_min], mu[i_min], cov[i_min], 
+#                                  w[j_min], mu[j_min], cov[j_min])
+ 
+#         # updating structures
+#         nindex = min(i_min,j_min) # index of the new component
+#         dindex = max(i_min,j_min) # index of the del component
+#         w[nindex] = w_m; mu[nindex] = mu_m; cov[nindex] = cov_m
+#         indexes = np.delete(indexes, get_index(indexes,dindex))
+#         update_merge_mapping(merge_mapping, nindex, dindex)
+#         nn_indexes[nindex] = radius_search(nn, mu_m, max_neigh, merge_mapping, nindex)
+#         update_structs(nn_indexes, diss_matrix, w, mu, cov, indexes, nindex, dindex)
+#         M -= 1
+
+#     # indexes of "alive" mixture components
+#     return w[indexes],mu[indexes],cov[indexes]
+
+
+
+
+
+
+
+
+def mixture_reduction(w, mu, cov, n_comp=1, k_sig=2, verbose=True, build_htree=False, adaptive_maxsig=False):
     """
     Gaussian Mixture Reduction Through KL-upper bound approach
     """
@@ -330,16 +378,31 @@ def mixture_reduction(w, mu, cov, n_comp, k_sig=2, verbose=True):
     # dimensionality of data
     d = mu.shape[1]
 
+    if build_htree:
+        # hierarchical tracking data structures
+        decomp_dict = dict()
+        join_dict = dict()
+        entity_dict = {i:[i] for i in range(M)}
+        # the below dict maps the indexes of the current GM components,
+        # to the indexes of the current cloud entities
+        entity_key_mapping = {i:i for i in range(M)}
+        # label for the next entity to be added
+        new_entity = M 
+
     # we consider neighbors at a radius equivalent to the lenght of k_sigma*sigma_max
     if cov.ndim==1:
         maxsig = k_sig*np.max(cov)
         # if cov is 1-dimensional we convert it to its covariance matrix form
-        cov = np.asarray( [(val**2)*np.identity(d) for val in cov] )
+        cov = np.asarray( [(sig**2)*np.identity(d) for sig in cov] )
     else:
         maxsig = k_sig*max([np.max(np.linalg.eig(_cov)[0])**(1./2) for _cov in cov])
 
     indexes = np.arange(M, dtype=np.int32)
     nn,nn_indexes = _compute_neighbors(mu,maxsig)
+    if adaptive_maxsig:
+        if d==2: rho = (np.sqrt(2)/maxsig)**(1./(M-1))
+        if d==3: rho = (np.sqrt(3)/maxsig)**(1./(M-1))
+    else: rho = None
 
     # idea: keep track that the k-th component was merged into the l-th positon
     merge_mapping = np.arange(M, dtype=np.int32)
@@ -348,13 +411,17 @@ def mixture_reduction(w, mu, cov, n_comp, k_sig=2, verbose=True):
     max_neigh = nn_indexes.shape[1]
     
     # computing the initial dissimilarity matrix
-    diss_matrix = build_diss_matrix(w, mu, cov, nn_indexes)
-    print(diss_matrix.shape)
+    diss_matrix= build_diss_matrix(w, mu, cov, nn_indexes)
     
     # main loop
     while M>N:
-        i_min,j_min = less_dissimilar(diss_matrix, indexes, nn_indexes)
-        if verbose: print('Merged components {0} and {1}'.format(i_min, j_min))  
+        i_min,j_min = least_dissimilar(diss_matrix, indexes, nn_indexes)
+        if i_min==-1:
+            print(indexes)
+            print(diss_matrix[indexes])
+            print(nn_indexes[indexes])
+            print("#"*50)
+        if verbose: print('{2}: Merged components {0} and {1}'.format(i_min, j_min, M))  
         w_m, mu_m, cov_m = merge(w[i_min], mu[i_min], cov[i_min], 
                                  w[j_min], mu[j_min], cov[j_min])
  
@@ -364,11 +431,30 @@ def mixture_reduction(w, mu, cov, n_comp, k_sig=2, verbose=True):
         w[nindex] = w_m; mu[nindex] = mu_m; cov[nindex] = cov_m
         indexes = np.delete(indexes, get_index(indexes,dindex))
         update_merge_mapping(merge_mapping, nindex, dindex)
-        nn_indexes[nindex] = radius_search(nn, mu_m, max_neigh, merge_mapping, nindex)
+        nn_indexes[nindex] = radius_search(nn, mu_m, max_neigh, merge_mapping, nindex, rho)
         update_structs(nn_indexes, diss_matrix, w, mu, cov, indexes, nindex, dindex)
         M -= 1
 
-    # indexes of "alive" mixture components
-    return w[indexes],mu[indexes],cov[indexes]
+        if build_htree:
+            # updating the hierarchical tracking structures
+            i_min = entity_key_mapping[i_min]
+            j_min = entity_key_mapping[j_min] 
+            decomp_dict[new_entity] = (i_min,j_min)
+            join_dict[(i_min,j_min)] = new_entity
+            entity_dict[new_entity] = entity_dict[i_min]+entity_dict[j_min]
 
+            entity_key_mapping[nindex] = new_entity
+            del entity_key_mapping[dindex]
+            new_entity += 1
 
+    # 
+    #inv = {kmax-i:i for i in range(kmax+1)}
+    #_decomp_dict = dict()
+    #_join_dict = dict()
+    #_entity_dict = dict()
+    #for key in decomp_dict: 
+    #    _decomp_dict[inv[key]]
+    if not build_htree: 
+        return w[indexes],mu[indexes],cov[indexes]
+    else: 
+        return decomp_dict,join_dict,entity_dict
