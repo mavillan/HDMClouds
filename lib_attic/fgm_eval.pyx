@@ -9,6 +9,8 @@ def gm_eval(double[:] w, double[:] sig, double[:] xc, double[:] yc, double[:] xe
     """
     Fast Gaussian Mixture Evaluation: No truncation
 
+    parameters
+    ----------
     w     : 1D np.ndarray - weight values
     sig   : 1D np.ndarray - sigma values
     xc    : 1D np.ndarray - x coordinate of center points
@@ -28,11 +30,41 @@ def gm_eval(double[:] w, double[:] sig, double[:] xc, double[:] yc, double[:] xe
     return ret.base
 
 
+def gm_eval_3d(double[:] w, double[:] sig, double[:] xc, double[:] yc, double[:] zc,
+               double[:] xe, double[:] ye, double[:] ze):    
+    """
+    Fast Gaussian Mixture Evaluation: No truncation
+
+    parameters
+    ----------
+    w     : 1D np.ndarray - weight values
+    sig   : 1D np.ndarray - sigma values
+    xc    : 1D np.ndarray - x coordinate of center points
+    yc    : 1D np.ndarray - y coordinate of center points
+    zc    : 1D np.ndarray - z coordinate of center points
+    xe    : 1D np.ndarray - x coordinate of eval points
+    ye    : 1D np.ndarray - y coordinate of eval points
+    ze    : 1D np.ndarray - z coordinate of eval points
+    """
+    cdef int m = len(xe)
+    cdef int n = len(xc)
+    cdef int i,j
+    cdef double quad
+    cdef double[:] ret = np.zeros(m)
+    for i in range(m):
+        for j in range(n):
+            quad = (xe[i]-xc[j])**2 + (ye[i]-yc[j])**2 +  (ze[i]-zc[j])**2
+            ret[i] += w[j] * exp( -quad/sig[j]**2 )
+    return ret.base
+
+
 def gm_eval_trunc(double[:] w, double[:] sig, double[:] xc, double[:] yc, double[:] xe, 
                  double[:] ye, long[:] neigh_indexes, long[:] neigh_indexes_aux):
     """
     Fast Gaussian Mixture Evaluation: Truncated Gaussians
 
+    parameters
+    ----------
     w     : 1D np.ndarray - weight values
     sig   : 1D np.ndarray - sigma values
     xc    : 1D np.ndarray - x coordinate of center points
@@ -98,9 +130,9 @@ def gm_eval_trunc_thread2(double[:] w, double[:] sig, double[:] xc, double[:] yc
     return ret.base
 
 
-def gm_eval_full_(double[:] w, double[:,:] sig, double[:] xc, double[:] yc, double[:] xe, double[:] ye):
+def gm_eval_full_(double[:] w, double[:,:] cov, double[:] xc, double[:] yc, double[:] xe, double[:] ye):
     """
-    Gaussian Mixture Evaluation with full Sigma
+    Gaussian Mixture Evaluation with full Covariance matrix
     """
     cdef int m = len(xe)
     cdef int n = len(xc)
@@ -109,8 +141,8 @@ def gm_eval_full_(double[:] w, double[:,:] sig, double[:] xc, double[:] yc, doub
     cdef double[:] ret = np.zeros(m)
     for i in range(m):
         for j in range(n):
-            quad = sig[j,2]*(xe[i]-xc[j])**2 - 2*sig[j,1]*(xe[i]-xc[j])*(ye[i]-yc[j]) + sig[j,0]*(ye[i]-yc[j])**2
-            det = sig[j,0]*sig[j,2]-sig[j,1]**2
+            quad = cov[j,2]*(xe[i]-xc[j])**2 - 2*cov[j,1]*(xe[i]-xc[j])*(ye[i]-yc[j]) + cov[j,0]*(ye[i]-yc[j])**2
+            det = cov[j,0]*cov[j,2]-cov[j,1]**2
             ret[i] += w[j]*exp(-quad/det)
     return ret.base
 
@@ -118,7 +150,7 @@ def gm_eval_full_(double[:] w, double[:,:] sig, double[:] xc, double[:] yc, doub
 def gm_eval_full(double[:] w, double[:,:] sig, double[:] theta, double[:] xc, double[:] yc, 
                   double[:] xe, double[:] ye):
     """
-    Gaussian Mixture Evaluation with full Sigma
+    Gaussian Mixture Evaluation with full Covariance matrix (parameterized by sig and theta)
     """
     cdef int m = len(xe)
     cdef int n = len(xc)
@@ -138,7 +170,7 @@ def gm_eval_full(double[:] w, double[:,:] sig, double[:] theta, double[:] xc, do
 def gm_eval_full_thread(double[:] w, double[:,:] sig, double[:] theta, double[:] xc, double[:] yc, 
                   double[:] xe, double[:] ye, long[:] neigh_indexes, long[:] neigh_indexes_aux):
     """
-    Gaussian Mixture Evaluation with full Sigma: Multithreading version 
+    Gaussian Mixture Evaluation with full Covariance matrix (parameterized by sig and theta): Multithreading version 
     """
     cdef int m = len(xe)
     cdef int i,j,sind,eind
