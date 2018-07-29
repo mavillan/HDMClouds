@@ -389,23 +389,6 @@ class HDMClouds():
         self.elapsed_time = time.time() - t0
 
 
-    def build_hierarchical_tree(self):
-        for i,hdice in enumerate(self.hdice_list):
-            print("-"*45)
-            print("Building the hierarchical tree for Isolated Cloud Entity {0}".format(i))
-            print("-"*45)
-            hdice.build_htree()
-
-
-    def split_ce(self, id):
-        pass
-
-    def join_ce(self, id1, id2):
-        pass
-        
-
-
-
 
 class HDICE():
     """
@@ -505,10 +488,6 @@ class HDICE():
         self.scipy_tol = None
         self.elapsed_time = None
         self.residual_stats = None
-        # hierarchical tree data structures
-        self.decomp_dict = None
-        self.join_dict = None
-        self.entity_dict = None
 
     def set_f0(self, f0):
         self.f0 = f0
@@ -702,16 +681,5 @@ class HDICE():
         # storing results    
         self.scipy_sol = sol
         self.elapsed_time = time.time() - t0
-
-
-    def build_htree(self):
-        w,sig = self.get_params_mapped()
-        mu = np.vstack([self.xc,self.yc]).T
-        htree = mixture_reduction(w, mu, sig, build_htree=True, adaptive_maxsig=True)
-        decomp_dict,join_dict,entity_dict = htree
-        self.decomp_dict = decomp_dict
-        self.join_dict = join_dict
-        self.entity_dict = entity_dict
-        return htree
 
 
