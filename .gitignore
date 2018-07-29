@@ -3,6 +3,7 @@ results/
 build
 data
 .ipynb_checkpoints/
+__pycache__
 
 
 # trash files
@@ -13,6 +14,7 @@ data
 *.DS_Store
 
 # more trash
+*.html
 *.ps
 *.aux
 *.bbl
@@ -39,6 +41,8 @@ data
 *.npy
 *.pkl
 *.sdf
+*.prof
+*_prof*
 
 \#*\#
 .\#*
