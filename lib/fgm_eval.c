@@ -2245,7 +2245,7 @@ static PyObject *__pyx_pf_8fgm_eval_gm_eval2d_1(CYTHON_UNUSED PyObject *__pyx_se
  *     for i in prange(m, nogil=True):
  *         for j in range(n):             # <<<<<<<<<<<<<<
  *             quad = (xe[i]-xc[j])**2 + (ye[i]-yc[j])**2
- *             ret[i] += w[j] * exp( -quad/sig[j]**2 )
+ *             ret[i] += w[j] * exp( -0.5*quad/sig[j]**2 )
  */
                             __pyx_t_11 = __pyx_v_n;
                             __pyx_t_12 = __pyx_t_11;
@@ -2256,7 +2256,7 @@ static PyObject *__pyx_pf_8fgm_eval_gm_eval2d_1(CYTHON_UNUSED PyObject *__pyx_se
  *     for i in prange(m, nogil=True):
  *         for j in range(n):
  *             quad = (xe[i]-xc[j])**2 + (ye[i]-yc[j])**2             # <<<<<<<<<<<<<<
- *             ret[i] += w[j] * exp( -quad/sig[j]**2 )
+ *             ret[i] += w[j] * exp( -0.5*quad/sig[j]**2 )
  *     return ret.base
  */
                               __pyx_t_14 = __pyx_v_i;
@@ -2268,14 +2268,14 @@ static PyObject *__pyx_pf_8fgm_eval_gm_eval2d_1(CYTHON_UNUSED PyObject *__pyx_se
                               /* "fgm_eval.pyx":38
  *         for j in range(n):
  *             quad = (xe[i]-xc[j])**2 + (ye[i]-yc[j])**2
- *             ret[i] += w[j] * exp( -quad/sig[j]**2 )             # <<<<<<<<<<<<<<
+ *             ret[i] += w[j] * exp( -0.5*quad/sig[j]**2 )             # <<<<<<<<<<<<<<
  *     return ret.base
  * 
  */
                               __pyx_t_18 = __pyx_v_j;
                               __pyx_t_19 = __pyx_v_j;
                               __pyx_t_20 = __pyx_v_i;
-                              *((double *) ( /* dim=0 */ (__pyx_v_ret.data + __pyx_t_20 * __pyx_v_ret.strides[0]) )) += ((*((double *) ( /* dim=0 */ (__pyx_v_w.data + __pyx_t_18 * __pyx_v_w.strides[0]) ))) * exp(((-__pyx_v_quad) / pow((*((double *) ( /* dim=0 */ (__pyx_v_sig.data + __pyx_t_19 * __pyx_v_sig.strides[0]) ))), 2.0))));
+                              *((double *) ( /* dim=0 */ (__pyx_v_ret.data + __pyx_t_20 * __pyx_v_ret.strides[0]) )) += ((*((double *) ( /* dim=0 */ (__pyx_v_w.data + __pyx_t_18 * __pyx_v_w.strides[0]) ))) * exp(((-0.5 * __pyx_v_quad) / pow((*((double *) ( /* dim=0 */ (__pyx_v_sig.data + __pyx_t_19 * __pyx_v_sig.strides[0]) ))), 2.0))));
                             }
                         }
                     }
@@ -2311,7 +2311,7 @@ static PyObject *__pyx_pf_8fgm_eval_gm_eval2d_1(CYTHON_UNUSED PyObject *__pyx_se
 
   /* "fgm_eval.pyx":39
  *             quad = (xe[i]-xc[j])**2 + (ye[i]-yc[j])**2
- *             ret[i] += w[j] * exp( -quad/sig[j]**2 )
+ *             ret[i] += w[j] * exp( -0.5*quad/sig[j]**2 )
  *     return ret.base             # <<<<<<<<<<<<<<
  * 
  * 
@@ -2699,7 +2699,7 @@ static PyObject *__pyx_pf_8fgm_eval_2gm_eval2d_2(CYTHON_UNUSED PyObject *__pyx_s
  *         for j in range(sind,eind):
  *             j = neigh_indexes[j]             # <<<<<<<<<<<<<<
  *             quad = (xe[i]-xc[j])**2 + (ye[i]-yc[j])**2
- *             ret[i] += w[j] * exp( -quad/sig[j]**2 )
+ *             ret[i] += w[j] * exp( -0.5*quad/sig[j]**2 )
  */
                               __pyx_t_16 = __pyx_v_j;
                               __pyx_v_j = (*((long *) ( /* dim=0 */ (__pyx_v_neigh_indexes.data + __pyx_t_16 * __pyx_v_neigh_indexes.strides[0]) )));
@@ -2708,7 +2708,7 @@ static PyObject *__pyx_pf_8fgm_eval_2gm_eval2d_2(CYTHON_UNUSED PyObject *__pyx_s
  *         for j in range(sind,eind):
  *             j = neigh_indexes[j]
  *             quad = (xe[i]-xc[j])**2 + (ye[i]-yc[j])**2             # <<<<<<<<<<<<<<
- *             ret[i] += w[j] * exp( -quad/sig[j]**2 )
+ *             ret[i] += w[j] * exp( -0.5*quad/sig[j]**2 )
  *     return ret.base
  */
                               __pyx_t_17 = __pyx_v_i;
@@ -2720,14 +2720,14 @@ static PyObject *__pyx_pf_8fgm_eval_2gm_eval2d_2(CYTHON_UNUSED PyObject *__pyx_s
                               /* "fgm_eval.pyx":59
  *             j = neigh_indexes[j]
  *             quad = (xe[i]-xc[j])**2 + (ye[i]-yc[j])**2
- *             ret[i] += w[j] * exp( -quad/sig[j]**2 )             # <<<<<<<<<<<<<<
+ *             ret[i] += w[j] * exp( -0.5*quad/sig[j]**2 )             # <<<<<<<<<<<<<<
  *     return ret.base
  * 
  */
                               __pyx_t_21 = __pyx_v_j;
                               __pyx_t_22 = __pyx_v_j;
                               __pyx_t_23 = __pyx_v_i;
-                              *((double *) ( /* dim=0 */ (__pyx_v_ret.data + __pyx_t_23 * __pyx_v_ret.strides[0]) )) += ((*((double *) ( /* dim=0 */ (__pyx_v_w.data + __pyx_t_21 * __pyx_v_w.strides[0]) ))) * exp(((-__pyx_v_quad) / pow((*((double *) ( /* dim=0 */ (__pyx_v_sig.data + __pyx_t_22 * __pyx_v_sig.strides[0]) ))), 2.0))));
+                              *((double *) ( /* dim=0 */ (__pyx_v_ret.data + __pyx_t_23 * __pyx_v_ret.strides[0]) )) += ((*((double *) ( /* dim=0 */ (__pyx_v_w.data + __pyx_t_21 * __pyx_v_w.strides[0]) ))) * exp(((-0.5 * __pyx_v_quad) / pow((*((double *) ( /* dim=0 */ (__pyx_v_sig.data + __pyx_t_22 * __pyx_v_sig.strides[0]) ))), 2.0))));
                             }
                         }
                     }
@@ -2763,7 +2763,7 @@ static PyObject *__pyx_pf_8fgm_eval_2gm_eval2d_2(CYTHON_UNUSED PyObject *__pyx_s
 
   /* "fgm_eval.pyx":60
  *             quad = (xe[i]-xc[j])**2 + (ye[i]-yc[j])**2
- *             ret[i] += w[j] * exp( -quad/sig[j]**2 )
+ *             ret[i] += w[j] * exp( -0.5*quad/sig[j]**2 )
  *     return ret.base             # <<<<<<<<<<<<<<
  * 
  * 
@@ -3233,7 +3233,7 @@ static PyObject *__pyx_pf_8fgm_eval_4gm_eval2d_3(CYTHON_UNUSED PyObject *__pyx_s
  *             b = -sin(2*theta[j])/sig[j,0]**2 + sin(2*theta[j])/sig[j,1]**2
  *             c = sin(theta[j])**2/sig[j,0]**2 + cos(theta[j])**2/sig[j,1]**2             # <<<<<<<<<<<<<<
  *             quad = a*(xe[i]-xc[j])**2 + b*(xe[i]-xc[j])*(ye[i]-yc[j]) + c*(ye[i]-yc[j])**2
- *             ret[i] += w[j]*exp(-quad)
+ *             ret[i] += w[j]*exp(-0.5*quad)
  */
                               __pyx_t_30 = __pyx_v_j;
                               __pyx_t_31 = __pyx_v_j;
@@ -3247,7 +3247,7 @@ static PyObject *__pyx_pf_8fgm_eval_4gm_eval2d_3(CYTHON_UNUSED PyObject *__pyx_s
  *             b = -sin(2*theta[j])/sig[j,0]**2 + sin(2*theta[j])/sig[j,1]**2
  *             c = sin(theta[j])**2/sig[j,0]**2 + cos(theta[j])**2/sig[j,1]**2
  *             quad = a*(xe[i]-xc[j])**2 + b*(xe[i]-xc[j])*(ye[i]-yc[j]) + c*(ye[i]-yc[j])**2             # <<<<<<<<<<<<<<
- *             ret[i] += w[j]*exp(-quad)
+ *             ret[i] += w[j]*exp(-0.5*quad)
  *     return ret.base
  */
                               __pyx_t_36 = __pyx_v_i;
@@ -3263,13 +3263,13 @@ static PyObject *__pyx_pf_8fgm_eval_4gm_eval2d_3(CYTHON_UNUSED PyObject *__pyx_s
                               /* "fgm_eval.pyx":82
  *             c = sin(theta[j])**2/sig[j,0]**2 + cos(theta[j])**2/sig[j,1]**2
  *             quad = a*(xe[i]-xc[j])**2 + b*(xe[i]-xc[j])*(ye[i]-yc[j]) + c*(ye[i]-yc[j])**2
- *             ret[i] += w[j]*exp(-quad)             # <<<<<<<<<<<<<<
+ *             ret[i] += w[j]*exp(-0.5*quad)             # <<<<<<<<<<<<<<
  *     return ret.base
  * 
  */
                               __pyx_t_44 = __pyx_v_j;
                               __pyx_t_45 = __pyx_v_i;
-                              *((double *) ( /* dim=0 */ (__pyx_v_ret.data + __pyx_t_45 * __pyx_v_ret.strides[0]) )) += ((*((double *) ( /* dim=0 */ (__pyx_v_w.data + __pyx_t_44 * __pyx_v_w.strides[0]) ))) * exp((-__pyx_v_quad)));
+                              *((double *) ( /* dim=0 */ (__pyx_v_ret.data + __pyx_t_45 * __pyx_v_ret.strides[0]) )) += ((*((double *) ( /* dim=0 */ (__pyx_v_w.data + __pyx_t_44 * __pyx_v_w.strides[0]) ))) * exp((-0.5 * __pyx_v_quad)));
                             }
                         }
                     }
@@ -3305,7 +3305,7 @@ static PyObject *__pyx_pf_8fgm_eval_4gm_eval2d_3(CYTHON_UNUSED PyObject *__pyx_s
 
   /* "fgm_eval.pyx":83
  *             quad = a*(xe[i]-xc[j])**2 + b*(xe[i]-xc[j])*(ye[i]-yc[j]) + c*(ye[i]-yc[j])**2
- *             ret[i] += w[j]*exp(-quad)
+ *             ret[i] += w[j]*exp(-0.5*quad)
  *     return ret.base             # <<<<<<<<<<<<<<
  * 
  * 
@@ -3652,7 +3652,7 @@ static PyObject *__pyx_pf_8fgm_eval_6gm_eval3d_1(CYTHON_UNUSED PyObject *__pyx_s
  *     for i in prange(m, nogil=True):
  *         for j in range(n):             # <<<<<<<<<<<<<<
  *             quad = (xe[i]-xc[j])**2 + (ye[i]-yc[j])**2 +  (ze[i]-zc[j])**2
- *             ret[i] += w[j] * exp( -quad/sig[j]**2 )
+ *             ret[i] += w[j] * exp( -0.5*quad/sig[j]**2 )
  */
                             __pyx_t_10 = __pyx_v_n;
                             __pyx_t_11 = __pyx_t_10;
@@ -3663,7 +3663,7 @@ static PyObject *__pyx_pf_8fgm_eval_6gm_eval3d_1(CYTHON_UNUSED PyObject *__pyx_s
  *     for i in prange(m, nogil=True):
  *         for j in range(n):
  *             quad = (xe[i]-xc[j])**2 + (ye[i]-yc[j])**2 +  (ze[i]-zc[j])**2             # <<<<<<<<<<<<<<
- *             ret[i] += w[j] * exp( -quad/sig[j]**2 )
+ *             ret[i] += w[j] * exp( -0.5*quad/sig[j]**2 )
  *     return ret.base
  */
                               __pyx_t_13 = __pyx_v_i;
@@ -3677,14 +3677,14 @@ static PyObject *__pyx_pf_8fgm_eval_6gm_eval3d_1(CYTHON_UNUSED PyObject *__pyx_s
                               /* "fgm_eval.pyx":115
  *         for j in range(n):
  *             quad = (xe[i]-xc[j])**2 + (ye[i]-yc[j])**2 +  (ze[i]-zc[j])**2
- *             ret[i] += w[j] * exp( -quad/sig[j]**2 )             # <<<<<<<<<<<<<<
+ *             ret[i] += w[j] * exp( -0.5*quad/sig[j]**2 )             # <<<<<<<<<<<<<<
  *     return ret.base
  * 
  */
                               __pyx_t_19 = __pyx_v_j;
                               __pyx_t_20 = __pyx_v_j;
                               __pyx_t_21 = __pyx_v_i;
-                              *((double *) ( /* dim=0 */ (__pyx_v_ret.data + __pyx_t_21 * __pyx_v_ret.strides[0]) )) += ((*((double *) ( /* dim=0 */ (__pyx_v_w.data + __pyx_t_19 * __pyx_v_w.strides[0]) ))) * exp(((-__pyx_v_quad) / pow((*((double *) ( /* dim=0 */ (__pyx_v_sig.data + __pyx_t_20 * __pyx_v_sig.strides[0]) ))), 2.0))));
+                              *((double *) ( /* dim=0 */ (__pyx_v_ret.data + __pyx_t_21 * __pyx_v_ret.strides[0]) )) += ((*((double *) ( /* dim=0 */ (__pyx_v_w.data + __pyx_t_19 * __pyx_v_w.strides[0]) ))) * exp(((-0.5 * __pyx_v_quad) / pow((*((double *) ( /* dim=0 */ (__pyx_v_sig.data + __pyx_t_20 * __pyx_v_sig.strides[0]) ))), 2.0))));
                             }
                         }
                     }
@@ -3720,7 +3720,7 @@ static PyObject *__pyx_pf_8fgm_eval_6gm_eval3d_1(CYTHON_UNUSED PyObject *__pyx_s
 
   /* "fgm_eval.pyx":116
  *             quad = (xe[i]-xc[j])**2 + (ye[i]-yc[j])**2 +  (ze[i]-zc[j])**2
- *             ret[i] += w[j] * exp( -quad/sig[j]**2 )
+ *             ret[i] += w[j] * exp( -0.5*quad/sig[j]**2 )
  *     return ret.base             # <<<<<<<<<<<<<<
  * 
  * 
@@ -4134,7 +4134,7 @@ static PyObject *__pyx_pf_8fgm_eval_8gm_eval3d_2(CYTHON_UNUSED PyObject *__pyx_s
  *         for j in range(sind,eind):
  *             j = neigh_indexes[j]             # <<<<<<<<<<<<<<
  *             quad = (xe[i]-xc[j])**2 + (ye[i]-yc[j])**2 +  (ze[i]-zc[j])**2
- *             ret[i] += w[j] * exp( -quad/sig[j]**2 )
+ *             ret[i] += w[j] * exp( -0.5*quad/sig[j]**2 )
  */
                               __pyx_t_16 = __pyx_v_j;
                               __pyx_v_j = (*((long *) ( /* dim=0 */ (__pyx_v_neigh_indexes.data + __pyx_t_16 * __pyx_v_neigh_indexes.strides[0]) )));
@@ -4143,7 +4143,7 @@ static PyObject *__pyx_pf_8fgm_eval_8gm_eval3d_2(CYTHON_UNUSED PyObject *__pyx_s
  *         for j in range(sind,eind):
  *             j = neigh_indexes[j]
  *             quad = (xe[i]-xc[j])**2 + (ye[i]-yc[j])**2 +  (ze[i]-zc[j])**2             # <<<<<<<<<<<<<<
- *             ret[i] += w[j] * exp( -quad/sig[j]**2 )
+ *             ret[i] += w[j] * exp( -0.5*quad/sig[j]**2 )
  *     return ret.base
  */
                               __pyx_t_17 = __pyx_v_i;
@@ -4157,14 +4157,14 @@ static PyObject *__pyx_pf_8fgm_eval_8gm_eval3d_2(CYTHON_UNUSED PyObject *__pyx_s
                               /* "fgm_eval.pyx":136
  *             j = neigh_indexes[j]
  *             quad = (xe[i]-xc[j])**2 + (ye[i]-yc[j])**2 +  (ze[i]-zc[j])**2
- *             ret[i] += w[j] * exp( -quad/sig[j]**2 )             # <<<<<<<<<<<<<<
+ *             ret[i] += w[j] * exp( -0.5*quad/sig[j]**2 )             # <<<<<<<<<<<<<<
  *     return ret.base
  * 
  */
                               __pyx_t_23 = __pyx_v_j;
                               __pyx_t_24 = __pyx_v_j;
                               __pyx_t_25 = __pyx_v_i;
-                              *((double *) ( /* dim=0 */ (__pyx_v_ret.data + __pyx_t_25 * __pyx_v_ret.strides[0]) )) += ((*((double *) ( /* dim=0 */ (__pyx_v_w.data + __pyx_t_23 * __pyx_v_w.strides[0]) ))) * exp(((-__pyx_v_quad) / pow((*((double *) ( /* dim=0 */ (__pyx_v_sig.data + __pyx_t_24 * __pyx_v_sig.strides[0]) ))), 2.0))));
+                              *((double *) ( /* dim=0 */ (__pyx_v_ret.data + __pyx_t_25 * __pyx_v_ret.strides[0]) )) += ((*((double *) ( /* dim=0 */ (__pyx_v_w.data + __pyx_t_23 * __pyx_v_w.strides[0]) ))) * exp(((-0.5 * __pyx_v_quad) / pow((*((double *) ( /* dim=0 */ (__pyx_v_sig.data + __pyx_t_24 * __pyx_v_sig.strides[0]) ))), 2.0))));
                             }
                         }
                     }
@@ -4200,7 +4200,7 @@ static PyObject *__pyx_pf_8fgm_eval_8gm_eval3d_2(CYTHON_UNUSED PyObject *__pyx_s
 
   /* "fgm_eval.pyx":137
  *             quad = (xe[i]-xc[j])**2 + (ye[i]-yc[j])**2 +  (ze[i]-zc[j])**2
- *             ret[i] += w[j] * exp( -quad/sig[j]**2 )
+ *             ret[i] += w[j] * exp( -0.5*quad/sig[j]**2 )
  *     return ret.base             # <<<<<<<<<<<<<<
  * 
  * 
@@ -4628,7 +4628,7 @@ static PyObject *__pyx_pf_8fgm_eval_10gm_eval3d_3(CYTHON_UNUSED PyObject *__pyx_
  *         for j in range(sind,eind):
  *             j = neigh_indexes[j]             # <<<<<<<<<<<<<<
  *             quad = ( (xe[i]-xc[j])**2 )/sigf[j]**2 + ( (ye[i]-yc[j])**2 +  (ze[i]-zc[j])**2 )/sig[j]**2
- *             ret[i] += w[j]*exp(-quad)
+ *             ret[i] += w[j]*exp(-0.5*quad)
  */
                               __pyx_t_16 = __pyx_v_j;
                               __pyx_v_j = (*((long *) ( /* dim=0 */ (__pyx_v_neigh_indexes.data + __pyx_t_16 * __pyx_v_neigh_indexes.strides[0]) )));
@@ -4637,7 +4637,7 @@ static PyObject *__pyx_pf_8fgm_eval_10gm_eval3d_3(CYTHON_UNUSED PyObject *__pyx_
  *         for j in range(sind,eind):
  *             j = neigh_indexes[j]
  *             quad = ( (xe[i]-xc[j])**2 )/sigf[j]**2 + ( (ye[i]-yc[j])**2 +  (ze[i]-zc[j])**2 )/sig[j]**2             # <<<<<<<<<<<<<<
- *             ret[i] += w[j]*exp(-quad)
+ *             ret[i] += w[j]*exp(-0.5*quad)
  *     return ret.base
  */
                               __pyx_t_17 = __pyx_v_i;
@@ -4653,12 +4653,12 @@ static PyObject *__pyx_pf_8fgm_eval_10gm_eval3d_3(CYTHON_UNUSED PyObject *__pyx_
                               /* "fgm_eval.pyx":157
  *             j = neigh_indexes[j]
  *             quad = ( (xe[i]-xc[j])**2 )/sigf[j]**2 + ( (ye[i]-yc[j])**2 +  (ze[i]-zc[j])**2 )/sig[j]**2
- *             ret[i] += w[j]*exp(-quad)             # <<<<<<<<<<<<<<
+ *             ret[i] += w[j]*exp(-0.5*quad)             # <<<<<<<<<<<<<<
  *     return ret.base
  */
                               __pyx_t_25 = __pyx_v_j;
                               __pyx_t_26 = __pyx_v_i;
-                              *((double *) ( /* dim=0 */ (__pyx_v_ret.data + __pyx_t_26 * __pyx_v_ret.strides[0]) )) += ((*((double *) ( /* dim=0 */ (__pyx_v_w.data + __pyx_t_25 * __pyx_v_w.strides[0]) ))) * exp((-__pyx_v_quad)));
+                              *((double *) ( /* dim=0 */ (__pyx_v_ret.data + __pyx_t_26 * __pyx_v_ret.strides[0]) )) += ((*((double *) ( /* dim=0 */ (__pyx_v_w.data + __pyx_t_25 * __pyx_v_w.strides[0]) ))) * exp((-0.5 * __pyx_v_quad)));
                             }
                         }
                     }
@@ -4694,7 +4694,7 @@ static PyObject *__pyx_pf_8fgm_eval_10gm_eval3d_3(CYTHON_UNUSED PyObject *__pyx_
 
   /* "fgm_eval.pyx":158
  *             quad = ( (xe[i]-xc[j])**2 )/sigf[j]**2 + ( (ye[i]-yc[j])**2 +  (ze[i]-zc[j])**2 )/sig[j]**2
- *             ret[i] += w[j]*exp(-quad)
+ *             ret[i] += w[j]*exp(-0.5*quad)
  *     return ret.base             # <<<<<<<<<<<<<<
  */
   __Pyx_XDECREF(__pyx_r);

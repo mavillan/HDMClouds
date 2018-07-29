@@ -35,7 +35,7 @@ def gm_eval2d_1(double[:] w, double[:] sig, double[:] xc, double[:] yc, double[:
     for i in prange(m, nogil=True):
         for j in range(n):
             quad = (xe[i]-xc[j])**2 + (ye[i]-yc[j])**2
-            ret[i] += w[j] * exp( -quad/sig[j]**2 )
+            ret[i] += w[j] * exp( -0.5*quad/sig[j]**2 )
     return ret.base
 
 
@@ -56,7 +56,7 @@ def gm_eval2d_2(double[:] w, double[:] sig, double[:] xc, double[:] yc, double[:
         for j in range(sind,eind):
             j = neigh_indexes[j]
             quad = (xe[i]-xc[j])**2 + (ye[i]-yc[j])**2
-            ret[i] += w[j] * exp( -quad/sig[j]**2 )
+            ret[i] += w[j] * exp( -0.5*quad/sig[j]**2 )
     return ret.base
 
 
@@ -79,7 +79,7 @@ def gm_eval2d_3(double[:] w, double[:,:] sig, double[:] theta, double[:] xc, dou
             b = -sin(2*theta[j])/sig[j,0]**2 + sin(2*theta[j])/sig[j,1]**2
             c = sin(theta[j])**2/sig[j,0]**2 + cos(theta[j])**2/sig[j,1]**2
             quad = a*(xe[i]-xc[j])**2 + b*(xe[i]-xc[j])*(ye[i]-yc[j]) + c*(ye[i]-yc[j])**2
-            ret[i] += w[j]*exp(-quad)
+            ret[i] += w[j]*exp(-0.5*quad)
     return ret.base
 
 
@@ -112,7 +112,7 @@ def gm_eval3d_1(double[:] w, double[:] sig, double[:] xc, double[:] yc, double[:
     for i in prange(m, nogil=True):
         for j in range(n):
             quad = (xe[i]-xc[j])**2 + (ye[i]-yc[j])**2 +  (ze[i]-zc[j])**2
-            ret[i] += w[j] * exp( -quad/sig[j]**2 )
+            ret[i] += w[j] * exp( -0.5*quad/sig[j]**2 )
     return ret.base
 
 
@@ -133,7 +133,7 @@ def gm_eval3d_2(double[:] w, double[:] sig, double[:] xc, double[:] yc, double[:
         for j in range(sind,eind):
             j = neigh_indexes[j]
             quad = (xe[i]-xc[j])**2 + (ye[i]-yc[j])**2 +  (ze[i]-zc[j])**2
-            ret[i] += w[j] * exp( -quad/sig[j]**2 )
+            ret[i] += w[j] * exp( -0.5*quad/sig[j]**2 )
     return ret.base
 
 
@@ -154,5 +154,5 @@ def gm_eval3d_3(double[:] w, double[:] sig, double[:] sigf, double[:] xc, double
         for j in range(sind,eind):
             j = neigh_indexes[j]
             quad = ( (xe[i]-xc[j])**2 )/sigf[j]**2 + ( (ye[i]-yc[j])**2 +  (ze[i]-zc[j])**2 )/sig[j]**2
-            ret[i] += w[j]*exp(-quad)
+            ret[i] += w[j]*exp(-0.5*quad)
     return ret.base
