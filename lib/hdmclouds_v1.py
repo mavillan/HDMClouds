@@ -1,4 +1,6 @@
 import time
+import string
+import copy
 import scipy
 import numba
 import scipy as sp
@@ -106,7 +108,7 @@ class HDMClouds():
         # Verification of consistency between n_center and number of significant emission pixels
         npix = np.sum(mask)
         n_gaussians = int(compression*npix)
-        print("[INFO] Number of pixels with significant emission: {0}".format(npix))
+        print("[INFO] Number of pixels with significant emission: {0}\n".format(npix))
         if 2*n_gaussians > npix:
             n_gaussians = npix//2
             print("[WARNING] The number of evaluation points (2*n_gaussians) cannot"
@@ -163,22 +165,36 @@ class HDMClouds():
         if self.ndim==3: radio = np.sqrt(3)*pix_lenght
         db = DBSCAN(eps=radio, min_samples=4, n_jobs=-1)
         db.fit(mu_init)
-        # visualizing the results
-        if verbose:
-            if self.ndim==2: gp.points_clusters(data, mu_init, db.labels_, wcs=wcs, title="Isolated Cloud Entities")
 
         # ensure that no -1 labels are present here!!!
         if np.any(db.labels_==-1): print("-1 labels are present!")
 
+
         # instantiating HDICE for each Isolated Cloud Entity
         hdice_list = list()
-        for i in range(db.labels_.min(), db.labels_.max()+1):
+        hdice_dict = dict()
+        num_ice = db.labels_.max()+1
+        alph = string.ascii_uppercase
+        if num_ice<=26:    hdice_keys = [alph[i%26] for i in range(num_ice)]
+        elif num_ice<=676: hdice_keys = [alph[i//26]+alph[i%26] for i in range(num_ice)]
+        else:              hdice_keys=  [alph[i//(26*26)]+alph[(i//26)%26]+alph[i%26] for i in range(num_ice)]
+        
+        for i in range(db.labels_.max()+1):
             _mask = db.labels_==i
-            print("Isolated Cloud Entity {0}: {1} pixels of significant emission.".format(i, np.sum(_mask)))
+            print("Isolated Cloud Entity {0}: {1} pixels of significant emission.".format(hdice_keys[i], np.sum(_mask)))
             hdice = HDICE(w_init[_mask], mu_init[_mask], sig_init[_mask], back_level, alpha, lamb, compression)
             hdice.set_f0(dfunc(hdice.eval_points))
             hdice.set_fgrid(dfunc(hdice.grid_points))
             hdice_list.append(hdice)
+            hdice_dict[hdice_keys[i]] = hdice
+
+        # visualizing the results of ICE
+        if verbose:
+            if self.ndim==2: 
+                gp.points_clusters(data, mu_init, db.labels_, hdice_keys, 
+                                   wcs=wcs, title="Isolated Cloud Entities")
+            if self.ndim==3:
+                pass
 
         # retrieving the parameters for the global GM
         w_global = list(); mu_global = list(); sig_global = list()
@@ -214,8 +230,10 @@ class HDMClouds():
         ########################################
         # HDMClouds internals
         ########################################
-        # list with HDICE objetcs for each ICE
+        # list and dict with HDICE objetcs for each ICE
         self.hdice_list = hdice_list
+        self.hdice_dict = hdice_dict
+        self.hdice_keys = hdice_keys
         # gaussian centers points
         self.xc = mu_global[:,0]; self.yc = mu_global[:,1] 
         if self.ndim==3: self.zc = mu_global[:,2]
@@ -369,7 +387,7 @@ class HDMClouds():
         w_global = list(); sig_global = list()
         for i,hdice in enumerate(self.hdice_list):
             print("-"*45)
-            print("Building GM for Isolated Cloud Entity {0}".format(i))
+            print("Building GM for Isolated Cloud Entity {0}".format(self.hdice_keys[i]))
             print("-"*45)
             hdice.build_gmr(max_nfev=max_nfev, tol=tol)
             _w,_sig = hdice.get_params_mapped()
@@ -391,18 +409,92 @@ class HDMClouds():
 
     def build_hierarchical_tree(self):
         for i,hdice in enumerate(self.hdice_list):
-            print("-"*45)
-            print("Building the hierarchical tree for Isolated Cloud Entity {0}".format(i))
-            print("-"*45)
+            print("Building the hierarchical tree for Isolated Cloud Entity {0}".format(self.hdice_keys[i]))
             hdice.build_htree()
+            print("DONE\n")
+
+        # global list of splitable and joinable cloud entities
+        splitable = list()
+        joinable = list()
+        for ice_key,hdice in self.hdice_dict.items():
+            for idx in hdice.splitable:
+                splitable.append(ice_key+"-"+str(idx))
+            for idx1,idx2 in hdice.joinable:
+                joinable.append( (ice_key+"-"+str(idx1),ice_key+"-"+str(idx2)) )
+
+        self.splitable = sorted(splitable)
+        self.joinable = sorted(joinable)
 
 
-    def split_ce(self, id):
-        pass
+    def split_ce(self, CEid):
+        """
+        CEid (string) - Identifier of the cloud entity to be splitted: "A-0"
+        """
+        ice_key,idx = CEid.split("-")
+        if ice_key in self.hdice_dict:
+            hdice = self.hdice_dict[ice_key]
+        else: 
+            print("Invalid CEid")
+            return None
 
-    def join_ce(self, id1, id2):
-        pass
-        
+        if int(idx) in hdice.decomp_dict:
+            idx1,idx2 = hdice.decomp_dict[int(idx)]
+        else:
+            print("Invalid CEid")
+            return None
+
+        # updating splitable cloud entities
+        self.splitable.remove(CEid)
+        self.splitable.append(ice_key+"-"+str(idx1))
+        self.splitable.append(ice_key+"-"+str(idx2))
+        self.splitable.sort()
+
+        # updating joinable cloud entities
+        _joinable = copy.copy(self.joinable)
+        for i,tup in enumerate(self.joinable):
+            if CEid in tup: del _joinable[i]
+            # podria ir un break?
+        _joinable.append( (ice_key+"-"+str(idx1),ice_key+"-"+str(idx2)) )
+        self.joinable = sorted(_joinable)
+
+
+    def join_ce(self, CEid_tuple):
+        CEid1,CEid2 = CEid_tuple
+        ice_key,idx1 = CEid1.split("-")
+        _,idx2 = CEid2.split("-")
+
+        if ice_key in self.hdice_dict:
+            hdice = self.hdice_dict[ice_key]
+        else:
+            print("Invalid CEid_tuple")
+            return None 
+
+        if (int(idx1),int(idx2)) in hdice.join_dict:
+            idx = hdice.join_dict[(int(idx1),int(idx2))]
+        elif (int(idx2),int(idx1)) in hdice.join_dict:
+            idx = hdice.join_dict[(int(idx2),int(idx1))]
+        else:
+            print("Invalid CEid_tuple")
+            return None
+
+
+        # updating splitable cloud entities
+        self.splitable.remove(CEid1)
+        self.splitable.remove(CEid2)
+        self.splitable.append(ice_key+"-"+str(idx))
+        self.splitable.sort()
+
+        # updating joinable cloud entities
+        self.joinable.remove(CEid_tuple)
+        for tup in hdice.join_dict:
+            if idx in tup:
+                idx1,idx2 = tup
+                self.joinable.append( (ice_key+"-"+str(idx1),ice_key+"-"+str(idx2)) )
+                break
+        self.joinable.sort()
+
+
+
 
 
 
@@ -707,11 +799,33 @@ class HDICE():
     def build_htree(self):
         w,sig = self.get_params_mapped()
         mu = np.vstack([self.xc,self.yc]).T
-        htree = mixture_reduction(w, mu, sig, build_htree=True, adaptive_maxsig=True)
+        htree = mixture_reduction(w, mu, sig, build_htree=True, adaptive_maxsig=True, verbose=False)
         decomp_dict,join_dict,entity_dict = htree
-        self.decomp_dict = decomp_dict
-        self.join_dict = join_dict
-        self.entity_dict = entity_dict
-        return htree
+
+        # dictionary to properly map the identifiers of the CE
+        # in the decomp_dict, join_dict and entity_dict
+        mp = dict()
+        for i,key in enumerate(sorted(entity_dict.keys(), reverse=True)): mp[key] = i
+
+        _decomp_dict = dict()
+        _join_dict = dict()
+        _entity_dict = dict()
+
+        for key,value in decomp_dict.items():
+            id1,id2 = value
+            _decomp_dict[mp[key]] = (mp[id1],mp[id2])
+
+        for key,value in join_dict.items():
+            id1,id2 = key
+            _join_dict[(mp[id1],mp[id2])] = mp[value]
+
+        for key,value in entity_dict.items():
+            _entity_dict[mp[key]] = value
+
+        self.decomp_dict = _decomp_dict
+        self.join_dict = _join_dict
+        self.entity_dict = _entity_dict
+
+        return (_decomp_dict,_join_dict,_entity_dict)
 
 
