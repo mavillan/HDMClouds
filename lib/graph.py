@@ -13,7 +13,6 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from fgm_eval  import gm_eval2d_1 as gm_eval
 from utils3D import u_eval as u_eval3D
 from utils3D import compute_solution
-from gmr import isd_diss_full
 from points_generation import boundary_map_caa
 
 from astropy.visualization import AsymmetricPercentileInterval
@@ -277,29 +276,109 @@ def points_plot(data, points=None, color=None, wcs=None,
         plt.savefig(save_path, format='eps', dpi=50, bbox_inches='tight')
     plt.show()
 
+
+def points_clusters(data, points, labels, hdice_keys, wcs=None, title=None):
+    """
+    Function to visualize the Isolated Cloud Entities
+    """
+    pix_lenght = 1./max(data.shape)
+    fig = plt.figure(figsize=(10,10))
+    if wcs is not None: fig.gca(projection=wcs)
+    plt.imshow(data, cmap=plt.cm.gray_r)
+
+    colors = plt.cm.gist_rainbow(np.linspace(0., 1., np.max(labels)+2))
+    for i,label in enumerate(range(labels.min(), labels.max()+1)):
+        _points = points[labels==label]
+        plt.scatter((_points[:,1]-pix_lenght/2.)/pix_lenght, (_points[:,0]-pix_lenght/2.)/pix_lenght, 
+                    s=20, facecolor=colors[i], lw=0, alpha=0.9, label="ICE {0}".format(hdice_keys[i]))
+    if title is not None: plt.title(title)
+    plt.legend(loc="best", prop={'size': 10})  
+    plt.grid()
+    ax = plt.gca()
+    ax.invert_yaxis()
+    if wcs is not None:
+        plt.xlabel(umap[wcs.axis_type_names[0]])
+        plt.ylabel(umap[wcs.axis_type_names[1]])
+    plt.show()
+
     
-def structs_plot(hdmc, structs_list, show_title=False, cmap1=plt.cm.cubehelix, 
-                 cmap2=plt.cm.gist_rainbow, show_isd=False, save_path=None, 
+# def structs_plot(hdmc, structs_list, show_title=False, cmap1=plt.cm.cubehelix, 
+#                  cmap2=plt.cm.gist_rainbow, save_path=None, 
+#                  wcs=None, unit=None, manual_label=False):
+#     # get all the (mapped) parameters
+#     xc, yc, c, sig = hdmc.get_params_mapped()
+    
+#     # evaluation points
+#     xgrid = hdmc.xgrid
+#     ygrid = hdmc.ygrid
+    
+#     fig = plt.figure(figsize=(12,9))
+#     if wcs is not None: fig.gca(projection=wcs)
+#     interval = AsymmetricPercentileInterval(0.25, 99.75, n_samples=100000)
+#     vmin, vmax = interval.get_limits(hdmc.orig_data)
+#     vmin = -0.1*(vmax-vmin) + vmin
+#     vmax = 0.1*(vmax-vmin) + vmax
+
+#     #plt.tick_params(axis='both', which='major', labelsize=1)
+#     plt.grid()
+#     n_comp = len(structs_list)
+#     if show_title: plt.title('{0} structs representation'.format(n_comp))
+
+#     ax = plt.gca()
+#     im = ax.imshow(hdmc.orig_data, cmap=cmap1, vmin=vmin, vmax=vmax)
+#     ax.invert_yaxis()
+#     if wcs is not None:
+#         plt.xlabel(umap[wcs.axis_type_names[0]])
+#         plt.ylabel(umap[wcs.axis_type_names[1]])
+#     else:
+#         plt.tick_params(labelbottom=False, labelleft=False) 
+
+#     # generating the color of sources
+#     maxclump = 10 # ARREGLAR ESTO!
+#     #color = plt.cm.rainbow(np.linspace(0., 1., maxclump))
+#     color = cmap2(np.linspace(0., 1., maxclump))
+#     np.random.seed(19); 
+#     np.random.shuffle(color)
+#     color = color[0:n_comp]
+#     levels = [0.025] # HARDCODED VALUE
+
+
+
+#     for i,indexes in enumerate(structs_list):
+#         _xc = xc[indexes]
+#         _yc = yc[indexes]
+#         _c = c[indexes]
+#         _sig = sig[indexes]
+#         u = gm_eval(_c, _sig, _xc, _yc, xgrid, ygrid)
+#         _u = u.reshape(hdmc.shape)
+
+
+#         cs = ax.contour(_u, levels=levels, colors=[color[i]], linewidths=4)
+#         ax.clabel(cs, cs.levels, inline=True, fmt="S{0}".format(i+1), 
+#                   fontsize=13, manual=manual_label)
+#         cs = ax.contour(_u, levels=levels, colors=[color[i]], linewidths=4)
+#         ax.clabel(cs, cs.levels, inline=True, fmt="S{0}".format(i+1), 
+        
+#     if save_path is not None:
+#         plt.savefig(save_path, format='eps', dpi=150, bbox_inches='tight')
+    
+#     cbar = plt.colorbar(im, ax=ax, pad=0.01, aspect=30)
+#     if unit is not None: cbar.set_label("[{0}]".format(unit))
+#     ax.set_aspect('auto')
+#     plt.show()
+
+
+def ce_plot(hdmc, show_title=False, cmap1=plt.cm.cubehelix, 
+                 cmap2=plt.cm.gist_rainbow, save_path=None, 
                  wcs=None, unit=None, manual_label=False):
-    # get all the (mapped) parameters
-    xc, yc, c, sig = hdmc.get_params_mapped()
-    
-    # evaluation points
-    xgrid = hdmc.xgrid
-    ygrid = hdmc.ygrid
-    
+
+    # first, the original data is plotted in the canvas
     fig = plt.figure(figsize=(12,9))
     if wcs is not None: fig.gca(projection=wcs)
     interval = AsymmetricPercentileInterval(0.25, 99.75, n_samples=100000)
     vmin, vmax = interval.get_limits(hdmc.orig_data)
     vmin = -0.1*(vmax-vmin) + vmin
     vmax = 0.1*(vmax-vmin) + vmax
-
-    #plt.tick_params(axis='both', which='major', labelsize=1)
-    plt.grid()
-    n_comp = len(structs_list)
-    if show_title: plt.title('{0} structs representation'.format(n_comp))
-
     ax = plt.gca()
     im = ax.imshow(hdmc.orig_data, cmap=cmap1, vmin=vmin, vmax=vmax)
     ax.invert_yaxis()
@@ -309,39 +388,38 @@ def structs_plot(hdmc, structs_list, show_title=False, cmap1=plt.cm.cubehelix,
     else:
         plt.tick_params(labelbottom=False, labelleft=False) 
 
-    # generating the color of sources
-    maxclump = 10 # ARREGLAR ESTO!
-    #color = plt.cm.rainbow(np.linspace(0., 1., maxclump))
-    color = cmap2(np.linspace(0., 1., maxclump))
+
+    #plt.tick_params(axis='both', which='major', labelsize=1)
+    plt.grid()
+    num_ce = len(hdmc.splittable)
+    if show_title: plt.title('{0} cloud entities decomposition'.format(num_ce))
+
+
+    # generating the color for the cloud entities
+    max_ce = 25 # ARREGLAR ESTO!
+    color = cmap2(np.linspace(0., 1., max_ce))
     np.random.seed(19); 
     np.random.shuffle(color)
-    color = color[0:n_comp]
-    levels = [0.025] # HARDCODED VALUE
+    color = color[0:num_ce]
+    levels = [0.025] # JARCOR VALUE
 
-    if show_isd:
-        # putting parameters in the correct format
-        w = hdmc.get_w()
-        mu = np.vstack([xc,yc]).T
-        Sig = np.zeros((len(w),2,2))
-        Sig[:,0,0] = sig; Sig[:,1,1] = sig
 
-    for i,indexes in enumerate(structs_list):
-        _xc = xc[indexes]
-        _yc = yc[indexes]
-        _c = c[indexes]
-        _sig = sig[indexes]
-        u = gm_eval(_c, _sig, _xc, _yc, xgrid, ygrid)
-        _u = u.reshape(hdmc.shape)
+    for i,CEid in enumerate(hdmc.splittable):
+        ice_key,idx = CEid.split("-")
+        hdice = hdmc.hdice_dict[ice_key]
 
-        if show_isd:
-            _isd = isd_diss_full(w[indexes], mu[indexes], Sig[indexes])
-            cs = ax.contour(_u, levels=levels, colors=[color[i]], linewidths=4)
-            cs.collections[0].set_label('ISD: {0}'.format(_isd))
+        indexes = hdice.entity_dict[int(idx)]
+        params = hdice.get_params_filtered(indexes)
+        u = hdice.get_approximation(params)
+        u = u.reshape(hdmc.shape)
+
+        if manual_label:
+            cs = ax.contour(u, levels=levels, colors=[color[i]], linewidths=4)
+            ax.clabel(cs, cs.levels, inline=True, fmt=CEid, fontsize=13, manual=manual_label)
         else:
-            cs = ax.contour(_u, levels=levels, colors=[color[i]], linewidths=4)
-            ax.clabel(cs, cs.levels, inline=True, fmt="S{0}".format(i+1), 
-                      fontsize=13, manual=manual_label)
-    if show_isd: plt.legend(bbox_to_anchor=(1.05, 1), loc=2)
+            cs = ax.contour(u, levels=levels, colors=[color[i]], linewidths=4)
+            ax.clabel(cs, cs.levels, inline=True, fmt=CEid, fontsize=13)
+        
     if save_path is not None:
         plt.savefig(save_path, format='eps', dpi=150, bbox_inches='tight')
     
