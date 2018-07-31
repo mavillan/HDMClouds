@@ -413,16 +413,18 @@ class HDMClouds():
             hdice.build_htree()
             print("DONE\n")
 
-        # global list of splitable and joinable cloud entities
-        splitable = list()
+        # global list of splittable and joinable cloud entities
+        splittable = list()
         joinable = list()
-        for ice_key,hdice in self.hdice_dict.items():
-            for idx in hdice.splitable:
-                splitable.append(ice_key+"-"+str(idx))
-            for idx1,idx2 in hdice.joinable:
-                joinable.append( (ice_key+"-"+str(idx1),ice_key+"-"+str(idx2)) )
+        for ice_key in self.hdice_dict.keys():
+            splittable.append(ice_key+"-0")
+        # for ice_key,hdice in self.hdice_dict.items():
+        #     for idx in hdice.splittable:
+        #         splittable.append(ice_key+"-"+str(idx))
+        #     for idx1,idx2 in hdice.joinable:
+        #         joinable.append( (ice_key+"-"+str(idx1),ice_key+"-"+str(idx2)) )
 
-        self.splitable = sorted(splitable)
+        self.splittable = sorted(splittable)
         self.joinable = sorted(joinable)
 
 
@@ -443,11 +445,11 @@ class HDMClouds():
             print("Invalid CEid")
             return None
 
-        # updating splitable cloud entities
-        self.splitable.remove(CEid)
-        self.splitable.append(ice_key+"-"+str(idx1))
-        self.splitable.append(ice_key+"-"+str(idx2))
-        self.splitable.sort()
+        # updating splittable cloud entities
+        self.splittable.remove(CEid)
+        self.splittable.append(ice_key+"-"+str(idx1))
+        self.splittable.append(ice_key+"-"+str(idx2))
+        self.splittable.sort()
 
         # updating joinable cloud entities
         _joinable = copy.copy(self.joinable)
@@ -478,11 +480,11 @@ class HDMClouds():
             return None
 
 
-        # updating splitable cloud entities
-        self.splitable.remove(CEid1)
-        self.splitable.remove(CEid2)
-        self.splitable.append(ice_key+"-"+str(idx))
-        self.splitable.sort()
+        # updating splittable cloud entities
+        self.splittable.remove(CEid1)
+        self.splittable.remove(CEid2)
+        self.splittable.append(ice_key+"-"+str(idx))
+        self.splittable.sort()
 
         # updating joinable cloud entities
         self.joinable.remove(CEid_tuple)
@@ -492,6 +494,10 @@ class HDMClouds():
                 self.joinable.append( (ice_key+"-"+str(idx1),ice_key+"-"+str(idx2)) )
                 break
         self.joinable.sort()
+
+
+    def visualize_results(self):
+        pass
 
 
 
@@ -637,6 +643,28 @@ class HDICE():
         sig = sig_mapping(self.sig, self.minsig, self.maxsig)
         return w,sig
 
+
+    def get_params_filtered(self, indexes):
+        """
+        Some explanation
+        """
+        w,sig = self.get_params_mapped()
+        xc = self.xc; yc = self.yc
+        N = len(w)
+        ret_xc = np.zeros(N)
+        ret_yc = np.zeros(N)
+        ret_w = np.zeros(N)
+        ret_sig = np.zeros(N)
+
+        ret_xc[indexes] = xc[indexes]
+        ret_yc[indexes] = yc[indexes]
+        ret_w[indexes] = w[indexes]
+        ret_sig[indexes] = sig[indexes]
+        
+        return ret_xc,ret_yc,ret_w,ret_sig
+
+
+
     def normalized_w(self):
         """
         Get the mapping from the 'c' coefficients in the linear
@@ -648,12 +676,19 @@ class HDICE():
         w = w * (2*np.pi*sig**2)**(d/2.)
         return w
 
-    def get_approximation(self):
-        w,sig = self.get_params_mapped()
+
+    def get_approximation(self, params=None):
+        if params is None:
+            w,sig = self.get_params_mapped()
+            xc = self.xc; yc = self.yc
+        else:
+            if self.ndim==2: xc,yc,w,sig = params
+            if self.ndim==3: xc,yc,zc,w,sig = params
+
         if self.ndim==2:
-            u = gm_eval2d_2(w, sig, self.xc, self.yc, self.xgrid, self.ygrid, self.nn_ind3, self.nn_ind3_aux)
+            u = gm_eval2d_2(w, sig, xc, yc, self.xgrid, self.ygrid, self.nn_ind3, self.nn_ind3_aux)
         if self.ndim==3:
-            u = gm_eval3d_2(w, sig, self.xc, self.yc, self.zc, self.xgrid, self.ygrid, self.zgrid, self.nn_ind3, self.nn_ind3_aux)
+            u = gm_eval3d_2(w, sig, xc, yc, zc, self.xgrid, self.ygrid, self.zgrid, self.nn_ind3, self.nn_ind3_aux)
         return u
 
     def get_residual_stats(self, plot=True):
