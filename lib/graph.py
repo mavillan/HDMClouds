@@ -410,7 +410,7 @@ def ce_plot(hdmc, show_title=False, cmap1=plt.cm.cubehelix,
 
         indexes = hdice.entity_dict[int(idx)]
         params = hdice.get_params_filtered(indexes)
-        u = hdice.get_approximation(params)
+        u = hdice.get_approximation_global(params)
         u = u.reshape(hdmc.shape)
 
         if manual_label:

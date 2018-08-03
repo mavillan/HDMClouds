@@ -182,7 +182,8 @@ class HDMClouds():
         for i in range(db.labels_.max()+1):
             _mask = db.labels_==i
             print("Isolated Cloud Entity {0}: {1} pixels of significant emission.".format(hdice_keys[i], np.sum(_mask)))
-            hdice = HDICE(w_init[_mask], mu_init[_mask], sig_init[_mask], back_level, alpha, lamb, compression)
+            hdice = HDICE(w_init[_mask], mu_init[_mask], sig_init[_mask], back_level, alpha, 
+                          lamb, compression, xgrid_global=xgrid, ygrid_global=self.ygrid)
             hdice.set_f0(dfunc(hdice.eval_points))
             hdice.set_fgrid(dfunc(hdice.grid_points))
             hdice_list.append(hdice)
@@ -418,14 +419,14 @@ class HDMClouds():
         joinable = list()
         for ice_key in self.hdice_dict.keys():
             splittable.append(ice_key+"-0")
-        # for ice_key,hdice in self.hdice_dict.items():
-        #     for idx in hdice.splittable:
-        #         splittable.append(ice_key+"-"+str(idx))
-        #     for idx1,idx2 in hdice.joinable:
-        #         joinable.append( (ice_key+"-"+str(idx1),ice_key+"-"+str(idx2)) )
 
+        # actual values
         self.splittable = sorted(splittable)
         self.joinable = sorted(joinable)
+
+        # original values are stored for the reset
+        self.splittable_reset = sorted(splittable)
+        self.joinable_reset = sorted(joinable) 
 
 
     def split_ce(self, CEid):
@@ -496,10 +497,13 @@ class HDMClouds():
         self.joinable.sort()
 
 
+    def reset_hierarchical_tree(self):
+        self.splittable = self.splittable_reset
+        self.joinable = self.joinable_reset
+
+
     def visualize_results(self):
         pass
-
-
 
 
 
@@ -509,16 +513,22 @@ class HDICE():
     """
     Hierarchical Decomposition of Independent/Isolated Cloud Entities
     """
-    def __init__(self, w_init, mu_init, sig_init, back_level, alpha, lamb, compression,
-        minsig=None, maxsig=None, kappa=5., verbose=False,):
+    def __init__(self, w_init, mu_init, sig_init, back_level, alpha, lamb, compression, minsig=None, maxsig=None, 
+                 kappa=5., verbose=False, xgrid_global=None, ygrid_global=None, zgrid_global=None):
 
         self.ndim = mu_init.shape[1]
         # Max intensity and grid positions in the region
         data_max = w_init.max()
+
+        # local grid points
         xgrid = mu_init[:,0]
         ygrid = mu_init[:,1]
         if self.ndim==3: zgrid = mu_init[:,2]
         grid_points = mu_init
+
+        # global grid points
+        if self.ndim==2: grid_points_global = np.vstack([xgrid_global,ygrid_global]).T
+        if self.ndim==3: grid_points_global = np.vstack([xgrid_global,ygrid_global,zgrid_global]).T
 
         # target number of gaussians (ceil rounding)
         n_gaussians = int(1+len(w_init)*compression)
@@ -554,6 +564,11 @@ class HDICE():
         self.nn_ind3 = nn_indexes
         self.nn_ind3_aux = nn_indexes_aux
 
+        nn_indexes,nn_indexes_aux = compute_neighbors(center_points, grid_points_global, kappa*maxsig)
+        self.nn_ind4 = nn_indexes
+        self.nn_ind4_aux = nn_indexes_aux
+
+
         if self.ndim==2:
             # normalizing w
             u = gm_eval2d_2(w, sig, xc, yc, xgrid, ygrid, self.nn_ind3, self.nn_ind3_aux)
@@ -582,9 +597,15 @@ class HDICE():
         self.xe = xe; self.ye = ye
         if self.ndim==3: self.ze = ze
         self.eval_points = eval_points
-        # grid points
+        # local grid points
         self.xgrid = xgrid; self.ygrid = ygrid
+        if self.ndim==3: self.zgrid = zgrid
         self.grid_points = grid_points
+        # global grid points
+        self.xgrid_global = xgrid_global
+        self.ygrid_global = ygrid_global
+        if self.ndim==3: self.zgrid_global = zgrid_global
+        self.grid_points_global = grid_points_global
         # minimal and maximal extend of gaussians
         self.minsig = minsig
         self.maxsig = maxsig
@@ -691,6 +712,22 @@ class HDICE():
             u = gm_eval3d_2(w, sig, xc, yc, zc, self.xgrid, self.ygrid, self.zgrid, self.nn_ind3, self.nn_ind3_aux)
         return u
 
+
+    def get_approximation_global(self, params=None):
+        if params is None:
+            w,sig = self.get_params_mapped()
+            xc = self.xc; yc = self.yc
+        else:
+            if self.ndim==2: xc,yc,w,sig = params
+            if self.ndim==3: xc,yc,zc,w,sig = params
+
+        if self.ndim==2:
+            u = gm_eval2d_2(w, sig, xc, yc, self.xgrid_global, self.ygrid_global, self.nn_ind4, self.nn_ind4_aux)
+        if self.ndim==3:
+            u = gm_eval3d_2(w, sig, xc, yc, zc, self.xgrid_global, self.ygrid_global, self.zgrid_global, self.nn_ind4, self.nn_ind4_aux)
+        return u
+
+
     def get_residual_stats(self, plot=True):
         u = self.get_approximation()
         residual = self.fgrid-u
@@ -737,7 +774,8 @@ class HDICE():
             print('nfev: {0}'.format(self.scipy_sol['nfev']))
             print("xtol: {0}".format(self.scipy_tol))
             print("ftol: {0}".format(self.scipy_tol))
-            
+         
+
     def summarize(self, solver_output=True, residual_stats=True, solution_plot=True,
                   params_plot=True, histograms_plot=True):
         print('\n \n' + '#'*90)    
