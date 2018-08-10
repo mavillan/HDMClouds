@@ -182,8 +182,12 @@ class HDMClouds():
         for i in range(db.labels_.max()+1):
             _mask = db.labels_==i
             print("Isolated Cloud Entity {0}: {1} pixels of significant emission.".format(hdice_keys[i], np.sum(_mask)))
-            hdice = HDICE(w_init[_mask], mu_init[_mask], sig_init[_mask], back_level, alpha, 
-                          lamb, compression, xgrid_global=xgrid, ygrid_global=self.ygrid)
+            if self.ndim==2:
+                hdice = HDICE(w_init[_mask], mu_init[_mask], sig_init[_mask], back_level, alpha, 
+                              lamb, compression, xgrid_global=xgrid, ygrid_global=self.ygrid)
+            if self.ndim==3:
+                hdice = HDICE(w_init[_mask], mu_init[_mask], sig_init[_mask], back_level, alpha, 
+                              lamb, compression, xgrid_global=xgrid, ygrid_global=self.ygrid, zgrid_global=self.zgrid)
             hdice.set_f0(dfunc(hdice.eval_points))
             hdice.set_fgrid(dfunc(hdice.grid_points))
             hdice_list.append(hdice)
@@ -227,6 +231,8 @@ class HDMClouds():
                 print("#"*100)
                 gp.points_plot(data, points=mu_global, color="red", wcs=wcs, title="Gaussian centers")
                 gp.points_plot(data, points=eval_points_global, color="blue", wcs=wcs, title="Evaluation Points")
+            if self.ndim==3:
+                pass
 
         ########################################
         # HDMClouds internals
@@ -261,6 +267,7 @@ class HDMClouds():
         """
         self.w = w
         self.sig = sig
+
 
     def get_params(self):
         """
@@ -374,8 +381,6 @@ class HDMClouds():
             plt.hist(term1.ravel(), bins=10, facecolor='seagreen', edgecolor='black', lw=2)
             plt.title('u-f')
             plt.show()
-
-            
 
 
     def build_gmr(self, max_nfev=None, verbose=True, tol=1.e-7):
@@ -502,10 +507,22 @@ class HDMClouds():
         self.joinable = self.joinable_reset
 
 
-    def visualize_results(self):
-        pass
+    def visualize(self):
+        def handler(hdmc, split="", join1="", join2="", reset=False):
+            if reset:
+                hdmc.reset_hierarchical_tree()
+            elif len(split)!=0:
+                if split in hdmc.splittable:
+                    hdmc.split_ce(split)
+            elif len(join1)!=0 and len(join2)!=0:
+                if (join1,join2) in hdmc.joinable:
+                    hdmc.join_ce((join1,join2))
+                elif (join2,join1) in hdmc.joinable:
+                    hdmc.join_ce((join2,join1))
+            gp.ce_plot(hdmc, wcs=hdmc.wcs)
+            return None
 
-
+        interact(handler, hdmc=fixed(self), split="", join1="", join2="", reset=False);
 
 
 
@@ -542,7 +559,7 @@ class HDICE():
         w, mu, cov = mixture_reduction(w_red, mu_red, cov_red, n_gaussians, verbose=False)
         xc = mu[:,0]
         yc = mu[:,1]
-        if self.ndim==3: ze = mu_red[:,2]
+        if self.ndim==3: zc = mu_red[:,2]
         center_points = mu
 
         # truncation of the covariance matrices
@@ -629,14 +646,18 @@ class HDICE():
         self.join_dict = None
         self.entity_dict = None
 
+
     def set_f0(self, f0):
         self.f0 = f0
+
 
     def set_fgrid(self, fgrid):
         self.fgrid = fgrid
 
+
     def set_w(self, w):
         self.w = w
+
 
     def set_sig(self, sig):
         self.sig = sig
@@ -671,18 +692,22 @@ class HDICE():
         """
         w,sig = self.get_params_mapped()
         xc = self.xc; yc = self.yc
+        if self.ndim==3: zc = self.zc
         N = len(w)
         ret_xc = np.zeros(N)
         ret_yc = np.zeros(N)
+        if self.ndim==3: ret_zc = np.zeros(N)
         ret_w = np.zeros(N)
         ret_sig = np.zeros(N)
 
         ret_xc[indexes] = xc[indexes]
         ret_yc[indexes] = yc[indexes]
+        if self.ndim==3: ret_zc[indexes] = zc[indexes]
         ret_w[indexes] = w[indexes]
         ret_sig[indexes] = sig[indexes]
         
-        return ret_xc,ret_yc,ret_w,ret_sig
+        if self.ndim==2: return ret_xc,ret_yc,ret_w,ret_sig
+        if self.ndim==3: return ret_xc,ret_yc,ret_zc,ret_w,ret_sig
 
 
 
@@ -702,6 +727,7 @@ class HDICE():
         if params is None:
             w,sig = self.get_params_mapped()
             xc = self.xc; yc = self.yc
+            if self.ndim==3: zc = self.zc
         else:
             if self.ndim==2: xc,yc,w,sig = params
             if self.ndim==3: xc,yc,zc,w,sig = params
@@ -717,6 +743,7 @@ class HDICE():
         if params is None:
             w,sig = self.get_params_mapped()
             xc = self.xc; yc = self.yc
+            if self.ndim==3: zc = self.zc
         else:
             if self.ndim==2: xc,yc,w,sig = params
             if self.ndim==3: xc,yc,zc,w,sig = params
@@ -871,7 +898,8 @@ class HDICE():
 
     def build_htree(self):
         w,sig = self.get_params_mapped()
-        mu = np.vstack([self.xc,self.yc]).T
+        if self.ndim==2: mu = np.vstack([self.xc,self.yc]).T
+        if self.ndim==3: mu = np.vstack([self.xc,self.yc,self.zc]).T
         htree = mixture_reduction(w, mu, sig, build_htree=True, adaptive_maxsig=True, verbose=False)
         decomp_dict,join_dict,entity_dict = htree
 

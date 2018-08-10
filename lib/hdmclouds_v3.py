@@ -69,7 +69,6 @@ class HDMClouds():
         data /= vmax-vmin
         data[~mask] = 0
 
-
         # generating the data function
         _x = data.shape[0]/max(data.shape) * np.linspace(0., 1., data.shape[0]+1, endpoint=True)
         _y = data.shape[1]/max(data.shape) * np.linspace(0., 1., data.shape[1]+1, endpoint=True)
