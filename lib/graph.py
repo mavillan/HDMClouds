@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import FormatStrFormatter
 from mpl_toolkits.mplot3d import Axes3D
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+import matplotlib.patches as mpatches
 
 from fgm_eval  import gm_eval2d_1 as gm_eval
 from utils3D import u_eval as u_eval3D
@@ -388,7 +389,6 @@ def ce_plot(hdmc, show_title=False, cmap1=plt.cm.cubehelix,
     else:
         plt.tick_params(labelbottom=False, labelleft=False) 
 
-
     #plt.tick_params(axis='both', which='major', labelsize=1)
     plt.grid()
     num_ce = len(hdmc.splittable)
@@ -444,6 +444,11 @@ def caa_show(data, caa, save_path=None, wcs=None):
             if bd_map[i,j]==0: continue
             rgba[i,j,:] = colors[bd_map[i,j]-1]
 
+    patches = []
+    for i,color in enumerate(colors):
+        colors[bd_map[i,j]-1]
+        patches.append(mpatches.Patch(color=color, label='CE {0}'.format(i+1)))
+
     fig = plt.figure(figsize=(8,8))
     if wcs is not None: fig.gca(projection=wcs)
     im = plt.imshow(rgba)
@@ -460,6 +465,7 @@ def caa_show(data, caa, save_path=None, wcs=None):
     #if wcs is not None:
         #cbar = plt.colorbar(im, ax=ax, pad=0.01, aspect=30)
     ax.set_aspect('auto')
+    plt.legend(handles=patches)
     plt.show()
     
 
