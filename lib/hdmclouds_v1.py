@@ -5,6 +5,7 @@ import scipy
 import numba
 import scipy as sp
 import numpy as np
+import pandas as pd
 import numexpr as ne
 from math import sqrt, exp
 import matplotlib.pyplot as plt
@@ -17,6 +18,8 @@ from points_generation import *
 from preprocessing import *
 from gmr import *
 from fgm_eval import *
+
+from IPython.display import display
 
 
 
@@ -431,7 +434,7 @@ class HDMClouds():
 
         # original values are stored for the reset
         self.splittable_reset = sorted(splittable)
-        self.joinable_reset = sorted(joinable) 
+        self.joinable_reset = sorted(joinable)
 
 
     def split_ce(self, CEid):
@@ -507,8 +510,44 @@ class HDMClouds():
         self.joinable = self.joinable_reset
 
 
+    def compute_stats(self):
+        stats = dict()
+
+        for CEid in self.splittable:
+            ice_key,idx = CEid.split("-")
+            hdice = self.hdice_dict[ice_key]
+
+            indexes = hdice.entity_dict[int(idx)]
+            params = hdice.get_params_filtered(indexes)
+            if self.ndim==2: xc,yc,w,sig = params
+            if self.ndim==3: xc,yc,zc,w,sig = params
+
+            xe,ye = hdice.xe,hdice.ye
+            if self.ndim==3: ze = hdice.ze
+            nn_ind1 = hdice.nn_ind1
+            nn_ind1_aux = hdice.nn_ind1_aux
+
+            if self.ndim==2: u = gm_eval2d_2(w, sig, xc, yc, xe, ye, nn_ind1, nn_ind1_aux)
+            if self.ndim==3: u = gm_eval3d_2(w, sig, xc, yc, zc, xe, ye, ze, nn_ind1, nn_ind1_aux)
+
+            # we first compute the centroid
+            x_centroid = np.sum(u*xe)/np.sum(u)
+            y_centroid = np.sum(u*ye)/np.sum(u)
+            if self.ndim==3: z_centroid = np.sum(u*ze)/np.sum(u)
+
+            # we apply to u the inverse mapping
+            total_flux = np.sum((self.vmax-self.vmin)*u + self.vmin)
+
+            if self.ndim==2: stats[CEid] = (total_flux, (x_centroid, y_centroid))
+            if self.ndim==3: stats[CEid] = (total_flux, (x_centroid, y_centroid, z_centroid))
+
+        # formatting out as pandas.DataFrame
+        stats = pd.DataFrame.from_dict(stats, orient="index", columns=["Flux [Jy/Beam]", "Centroid Position"])
+        return stats
+
+
     def visualize(self):
-        def handler(hdmc, split="", join1="", join2="", reset=False):
+        def handler(hdmc, split="", join1="", join2="", reset=False, show_stats=False):
             if reset:
                 hdmc.reset_hierarchical_tree()
             elif len(split)!=0:
@@ -520,9 +559,13 @@ class HDMClouds():
                 elif (join2,join1) in hdmc.joinable:
                     hdmc.join_ce((join2,join1))
             gp.ce_plot(hdmc, wcs=hdmc.wcs)
+
+            if show_stats:
+                stats = self.compute_stats()
+                display(stats)
             return None
 
-        interact(handler, hdmc=fixed(self), split="", join1="", join2="", reset=False);
+        interact(handler, hdmc=fixed(self), split="", join1="", join2="", reset=False, show_stats=False);
 
 
 
