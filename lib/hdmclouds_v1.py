@@ -264,6 +264,15 @@ class HDMClouds():
         self.residual_stats = None
 
 
+    def coord2world(self, xcoord, ycoord):
+        # we first transform from our internal coordinate
+        # to a pixel position
+        px = (xcoord-self.pix_lenght/2.)/self.pix_lenght
+        py = (ycoord-self.pix_lenght/2.)/self.pix_lenght
+        wx,wy = self.wcs.wcs_pix2world(px,py,0)
+        return wx,wy
+
+
     def set_params(self,w,sig):
         """
         Set the parameters of the global GM
@@ -535,14 +544,17 @@ class HDMClouds():
             y_centroid = np.sum(u*ye)/np.sum(u)
             if self.ndim==3: z_centroid = np.sum(u*ze)/np.sum(u)
 
+            wx_centroid,wy_centroid = self.coord2world(x_centroid,y_centroid)
+
             # we apply to u the inverse mapping
             total_flux = np.sum((self.vmax-self.vmin)*u + self.vmin)
 
-            if self.ndim==2: stats[CEid] = (total_flux, (x_centroid, y_centroid))
+            # FALTA AGREGAR WZ_CENTROID!
+            if self.ndim==2: stats[CEid] = (total_flux, (x_centroid, y_centroid), (wx_centroid, wy_centroid))
             if self.ndim==3: stats[CEid] = (total_flux, (x_centroid, y_centroid, z_centroid))
 
         # formatting out as pandas.DataFrame
-        stats = pd.DataFrame.from_dict(stats, orient="index", columns=["Flux [Jy/Beam]", "Centroid Position"])
+        stats = pd.DataFrame.from_dict(stats, orient="index", columns=["Flux [Jy/Beam]", "Centroid Position", "Centroid Position (ra-dec) [deg]"])
         return stats
 
 
