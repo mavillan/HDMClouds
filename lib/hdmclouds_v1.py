@@ -165,7 +165,7 @@ class HDMClouds():
 
         # DBSAN to find isolated structures
         if self.ndim==2: radio = np.sqrt(2)*pix_lenght
-        if self.ndim==3: radio = np.sqrt(3)*pix_lenght
+        if self.ndim==3: radio = 10*np.sqrt(3)*pix_lenght
         db = DBSCAN(eps=radio, min_samples=4, n_jobs=-1)
         db.fit(mu_init)
 
@@ -207,6 +207,7 @@ class HDMClouds():
         # retrieving the parameters for the global GM
         w_global = list(); mu_global = list(); sig_global = list()
         eval_points_global = list()
+
         for hdice in hdice_list:
             w,sig = hdice.get_params_mapped()
             mu = hdice.center_points
@@ -300,6 +301,7 @@ class HDMClouds():
         return w
 
 
+
     def get_approximation(self):
         w,sig = self.get_params()
         if self.ndim==2:
@@ -308,6 +310,7 @@ class HDMClouds():
             u = gm_eval3d_2(w, sig, self.xc, self.yc, self.zc, self.xgrid, self.ygrid, self.zgrid, self.nn_ind, self.nn_ind_aux)
         u = u.reshape(self.shape)
         return u
+
 
 
     def get_residual_stats(self, plot=True):
@@ -356,6 +359,7 @@ class HDMClouds():
         return out
 
 
+
     def prune(self):
         w = self.w
         mean = np.mean(w)
@@ -367,7 +371,8 @@ class HDMClouds():
         self.yc = self.yc[mask]
         self.w = self.w[mask]
         self.sig = self.sig[mask]
-            
+   
+
     
     def summarize(self, solver_output=True, residual_stats=True, solution_plot=True,
                   params_plot=True, histograms_plot=True):
@@ -393,6 +398,7 @@ class HDMClouds():
             plt.hist(term1.ravel(), bins=10, facecolor='seagreen', edgecolor='black', lw=2)
             plt.title('u-f')
             plt.show()
+
 
 
     def build_gmr(self, max_nfev=None, verbose=True, tol=1.e-7):
