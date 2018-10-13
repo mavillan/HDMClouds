@@ -41,8 +41,8 @@ def image_plot(data, title=None, cmap=plt.cm.cubehelix, wcs=None,
     ax.invert_yaxis()
     if title is not None: plt.title(title)
     if wcs is not None:
-        plt.xlabel(umap[wcs.axis_type_names[0]])
-        plt.ylabel(umap[wcs.axis_type_names[1]])
+        ax.set_xlabel(umap[wcs.axis_type_names[0]])
+        ax.set_ylabel(umap[wcs.axis_type_names[1]])
     cbar = plt.colorbar(im, ax=ax, pad=0.01, aspect=30)
     if unit is not None: cbar.set_label("[{0}]".format(unit))
     ax.set_aspect('auto')
@@ -271,8 +271,8 @@ def points_plot(data, points=None, color=None, wcs=None,
     ax.invert_yaxis()
     if title is not None: plt.title(title)
     if wcs is not None:
-        plt.xlabel(umap[wcs.axis_type_names[0]])
-        plt.ylabel(umap[wcs.axis_type_names[1]])
+        ax.set_xlabel(umap[wcs.axis_type_names[0]])
+        ax.set_ylabel(umap[wcs.axis_type_names[1]])
     if save_path is not None:
         plt.savefig(save_path, format='eps', dpi=50, bbox_inches='tight')
     plt.show()
@@ -298,8 +298,8 @@ def points_clusters(data, points, labels, hdice_keys, wcs=None, title=None):
     ax = plt.gca()
     ax.invert_yaxis()
     if wcs is not None:
-        plt.xlabel(umap[wcs.axis_type_names[0]])
-        plt.ylabel(umap[wcs.axis_type_names[1]])
+        ax.set_xlabel(umap[wcs.axis_type_names[0]])
+        ax.set_ylabel(umap[wcs.axis_type_names[1]])
     plt.show()
 
     
@@ -369,7 +369,7 @@ def points_clusters(data, points, labels, hdice_keys, wcs=None, title=None):
 #     plt.show()
 
 
-def ce_plot(hdmc, show_title=False, cmap1=plt.cm.cubehelix, 
+def ce_plot(hdmc, show_title=False, cmap1=plt.cm.gray_r, 
                  cmap2=plt.cm.gist_rainbow, save_path=None, 
                  wcs=None, unit=None, manual_label=False):
 
@@ -384,8 +384,8 @@ def ce_plot(hdmc, show_title=False, cmap1=plt.cm.cubehelix,
     im = ax.imshow(hdmc.orig_data, cmap=cmap1, vmin=vmin, vmax=vmax)
     ax.invert_yaxis()
     if wcs is not None:
-        plt.xlabel(umap[wcs.axis_type_names[0]])
-        plt.ylabel(umap[wcs.axis_type_names[1]])
+        ax.set_xlabel(umap[wcs.axis_type_names[0]])
+        ax.set_ylabel(umap[wcs.axis_type_names[1]])
     else:
         plt.tick_params(labelbottom=False, labelleft=False) 
 
@@ -419,6 +419,7 @@ def ce_plot(hdmc, show_title=False, cmap1=plt.cm.cubehelix,
         else:
             cs = ax.contour(u, levels=levels, colors=[color[i]], linewidths=4)
             ax.clabel(cs, cs.levels, inline=True, fmt=CEid, fontsize=13)
+            #ax.clabel(cs, cs.levels, inline=True, fmt="S"+CEid.split("-")[1], fontsize=13)
         
     if save_path is not None:
         plt.savefig(save_path, format='eps', dpi=150, bbox_inches='tight')
@@ -453,13 +454,14 @@ def caa_show(data, caa, save_path=None, wcs=None):
     if wcs is not None: fig.gca(projection=wcs)
     im = plt.imshow(rgba)
     plt.grid()
-    if wcs is not None:
-        plt.xlabel(umap[wcs.axis_type_names[0]])
-        plt.ylabel(umap[wcs.axis_type_names[1]])
-    else:
-        plt.tick_params(labelbottom=False, labelleft=False)
     ax = plt.gca()
     ax.invert_yaxis()
+    if wcs is not None:
+        ax.set_xlabel(umap[wcs.axis_type_names[0]])
+        ax.set_ylabel(umap[wcs.axis_type_names[1]])
+    else:
+        plt.tick_params(labelbottom=False, labelleft=False)
+
     if save_path is not None:
         plt.savefig(save_path, format='eps', dpi=150, bbox_inches='tight')
     #if wcs is not None:
@@ -664,11 +666,11 @@ def structs_plot3D(hdmc, structs_list, n_levels=1, save_path=None):
         _data -= dmin; _data /= dmax
         ax.imshow(_data, cmap=plt.cm.cubehelix, aspect='auto')
         if axis==0:       
-            plt.xlabel("RA"); plt.ylabel("DEC")  
+            ax.set_xlabel("RA"); ax.set_ylabel("DEC")  
         elif axis==1:
-            plt.xlabel("RA"); plt.ylabel("FREQ")
+            ax.set_xlabel("RA"); ax.set_ylabel("FREQ")
         elif axis==2:
-            plt.xlabel("FREQ"); plt.ylabel("DEC")
+            ax.set_xlabel("FREQ"); ax.set_ylabel("DEC")
             ax.yaxis.set_label_position("right")
             ax.yaxis.tick_right()
         ax.tick_params(axis='both', which='major')
