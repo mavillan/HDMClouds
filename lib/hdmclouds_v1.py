@@ -166,7 +166,7 @@ class HDMClouds():
 
         # DBSAN to find isolated structures
         if self.ndim==2: radio = np.sqrt(2)*pix_lenght
-        if self.ndim==3: radio = 10*np.sqrt(3)*pix_lenght
+        if self.ndim==3: radio = np.sqrt(3)*pix_lenght
         db = DBSCAN(eps=radio, min_samples=4, n_jobs=-1)
         db.fit(mu_init)
 
@@ -272,8 +272,13 @@ class HDMClouds():
         # to a pixel position
         px = (xcoord-self.pix_lenght/2.)/self.pix_lenght
         py = (ycoord-self.pix_lenght/2.)/self.pix_lenght
-        wx,wy = self.wcs.wcs_pix2world(px,py,0)
-        return wx,wy
+        angx,angy = self.wcs.wcs_pix2world(px,py,0)
+        # convinient transformations
+        angx = Angle(angx, units.degree)
+        angy = Angle(angy, units.degree)
+        angx = angx.to_string(unit=units.degree, sep=('deg', 'm', 's'))
+        angy = angy.to_string(unit=units.degree, sep=('deg', 'm', 's'))
+        return angx,angy
 
 
     def set_params(self,w,sig):
@@ -552,17 +557,21 @@ class HDMClouds():
             y_centroid = np.sum(u*ye)/np.sum(u)
             if self.ndim==3: z_centroid = np.sum(u*ze)/np.sum(u)
 
-            wx_centroid,wy_centroid = self.coord2world(x_centroid,y_centroid)
+            ra_centroid,dec_centroid = self.coord2world(y_centroid,x_centroid)
 
             # we apply to u the inverse mapping
             total_flux = np.sum((self.vmax-self.vmin)*u + self.vmin)
 
             # FALTA AGREGAR WZ_CENTROID!
-            if self.ndim==2: stats[CEid] = (total_flux, (x_centroid, y_centroid), (wx_centroid, wy_centroid))
+            if self.ndim==2: stats[CEid] = (total_flux, (y_centroid, x_centroid), (ra_centroid, dec_centroid))
             if self.ndim==3: stats[CEid] = (total_flux, (x_centroid, y_centroid, z_centroid))
 
         # formatting out as pandas.DataFrame
-        stats = pd.DataFrame.from_dict(stats, orient="index", columns=["Flux [Jy/Beam]", "Centroid Position", "Centroid Position (ra-dec) [deg]"])
+        stats = pd.DataFrame.from_dict(stats, 
+                            orient="index", 
+                            columns=["Flux [Jy/Beam]", 
+                                     "Centroid Position (X-Y)", 
+                                    "Centroid Position (RA-Dec)"])
         return stats
 
 

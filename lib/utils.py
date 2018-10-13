@@ -12,6 +12,7 @@ from sklearn.neighbors import NearestNeighbors
 from astropy.io import fits
 from astropy.wcs import WCS
 import astropy.units as units
+from astropy.coordinates import Angle
 from astropy.utils.exceptions import AstropyWarning
 from spectral_cube import SpectralCube
 
