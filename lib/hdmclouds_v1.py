@@ -161,6 +161,7 @@ class HDMClouds():
         if self.ndim==3: mu_init = np.vstack([Xe[mask], Ye[mask], Ze[mask]]).T
         # initial sigma
         k = 0.25
+        #pix_lenght_ = sum([1./data.shape[0], 1./data.shape[1], 1./data.shape[2]])/3.
         sig_init = (pix_lenght/(2.*k))*np.ones(w_init.shape[0])
 
         # DBSAN to find isolated structures
@@ -172,11 +173,11 @@ class HDMClouds():
         # ensure that no -1 labels are present here!!!
         if np.any(db.labels_==-1): print("-1 labels are present!")
 
-
         # instantiating HDICE for each Isolated Cloud Entity
         hdice_list = list()
         hdice_dict = dict()
         num_ice = db.labels_.max()+1
+
         alph = string.ascii_uppercase
         if num_ice<=26:    hdice_keys = [alph[i%26] for i in range(num_ice)]
         elif num_ice<=676: hdice_keys = [alph[i//26]+alph[i%26] for i in range(num_ice)]
@@ -187,10 +188,11 @@ class HDMClouds():
             print("Isolated Cloud Entity {0}: {1} pixels of significant emission.".format(hdice_keys[i], np.sum(_mask)))
             if self.ndim==2:
                 hdice = HDICE(w_init[_mask], mu_init[_mask], sig_init[_mask], back_level, alpha, 
-                              lamb, compression, xgrid_global=xgrid, ygrid_global=self.ygrid)
+                              lamb, compression, xgrid_global=xgrid, ygrid_global=ygrid)
             if self.ndim==3:
                 hdice = HDICE(w_init[_mask], mu_init[_mask], sig_init[_mask], back_level, alpha, 
-                              lamb, compression, xgrid_global=xgrid, ygrid_global=self.ygrid, zgrid_global=self.zgrid)
+                              lamb, compression, xgrid_global=xgrid, ygrid_global=ygrid, zgrid_global=zgrid)
+
             hdice.set_f0(dfunc(hdice.eval_points))
             hdice.set_fgrid(dfunc(hdice.grid_points))
             hdice_list.append(hdice)
@@ -327,16 +329,16 @@ class HDMClouds():
             gp.residual_histogram(residual[self.mask])
 
         if plot and self.ndim==3:
-            print("-"*118)
+            print("-"*110)
             print("ORIGINAL DATA")
             gp.cube_plot(self.data, wcs=self.wcs, freq=self.freq)
-            print("-"*118)
+            print("-"*110)
             print("GAUSSIAN MIXTURE")
             gp.cube_plot(u, wcs=self.wcs, freq=self.freq)
-            print("-"*118)
+            print("-"*110)
             print("RESIDUAL")
             gp.cube_plot(residual, wcs=self.wcs, cmap=plt.cm.RdBu_r, freq=self.freq)
-            print("-"*118)
+            print("-"*110)
 
         # computing residual stats
         total_flux = np.sum(self.data[self.mask])
@@ -595,7 +597,7 @@ class HDICE():
                  kappa=5., verbose=False, xgrid_global=None, ygrid_global=None, zgrid_global=None):
 
         self.ndim = mu_init.shape[1]
-        # Max intensity and grid positions in the region
+        # Max intensity in the CE
         data_max = w_init.max()
 
         # local grid points
@@ -608,8 +610,8 @@ class HDICE():
         if self.ndim==2: grid_points_global = np.vstack([xgrid_global,ygrid_global]).T
         if self.ndim==3: grid_points_global = np.vstack([xgrid_global,ygrid_global,zgrid_global]).T
 
-        # target number of gaussians (ceil rounding)
-        n_gaussians = int(1+len(w_init)*compression)
+        # target number of gaussians
+        n_gaussians = int(len(w_init)*compression)
 
         w_red, mu_red, cov_red = mixture_reduction(w_init, mu_init, sig_init, 2*n_gaussians, verbose=False)
         xe = mu_red[:,0]
@@ -620,7 +622,7 @@ class HDICE():
         w, mu, cov = mixture_reduction(w_red, mu_red, cov_red, n_gaussians, verbose=False)
         xc = mu[:,0]
         yc = mu[:,1]
-        if self.ndim==3: zc = mu_red[:,2]
+        if self.ndim==3: zc = mu[:,2]
         center_points = mu
 
         # truncation of the covariance matrices
@@ -839,6 +841,7 @@ class HDICE():
         print("Normalized flux lost: {0}".format(out[3]))
 
         return out
+
 
     def prune(self):
         w = self.w
