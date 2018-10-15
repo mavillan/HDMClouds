@@ -6,11 +6,11 @@ import numba
 import scipy as sp
 import numpy as np
 import pandas as pd
-import numexpr as ne
 from math import sqrt, exp
 import matplotlib.pyplot as plt
 
 from sklearn.cluster import DBSCAN
+from sklearn.neighbors import KNeighborsClassifier
 
 import graph as gp
 from utils import *
@@ -59,7 +59,7 @@ class HDMClouds():
     """
     Hierarchical Decomposition of Molecular Clouds
     """
-    def __init__(self, data, freq=None, alpha=0., lamb=1., compression=0.25, back_level=None,
+    def __init__(self, data, freq=None, n_gaussians=250, alpha=0., lamb=1., back_level=None,
         minsig=None, maxsig=None, kappa=5., verbose=False, wcs=None):
 
         #############################################################
@@ -98,6 +98,7 @@ class HDMClouds():
 
         self.data = data
         self.freq = freq
+        self.n_gaussians = n_gaussians
         self.mask = mask
         self.ndim = data.ndim
         self.shape = data.shape
@@ -110,8 +111,9 @@ class HDMClouds():
         
         # Verification of consistency between n_center and number of significant emission pixels
         npix = np.sum(mask)
-        n_gaussians = int(compression*npix)
-        print("[INFO] Number of pixels with significant emission: {0}\n".format(npix))
+        compression = n_gaussians/float(npix)
+        print("[INFO] Number of pixels with significant emission: {0}".format(npix))
+        print("[INFO] Level of compression: {0}%".format(compression*100))
         if 2*n_gaussians > npix:
             n_gaussians = npix//2
             print("[WARNING] The number of evaluation points (2*n_gaussians) cannot"
@@ -137,18 +139,15 @@ class HDMClouds():
             grid_points = np.vstack([xgrid,ygrid,zgrid]).T
             self.grid_points = grid_points
 
-
         #######################################
         # Computing boundary points
         #######################################
-        #Nb = 0
-        #boundary_points = boundary_points_generation(data, mask, Nb)
-        #gp.points_plot(data, points=boundary_points, color="green", wcs=wcs)
-        # right format
-        #xb = boundary_points[:,0]
-        #yb = boundary_points[:,1]
-        #points_bound = np.vstack([xb,yb]).T
-
+        if self.ndim==2:
+            bound_points = boundary_points_generation(data, mask, neigh_length=2    )
+            xb = bound_points[:,0]; yb = bound_points[:,1]
+        if self.ndim==3:
+            xb = None; yb = None; zb = None
+            bound_points = None
 
         ##########################################
         # Finding the isolated cloud entities
@@ -161,7 +160,8 @@ class HDMClouds():
         if self.ndim==3: mu_init = np.vstack([Xe[mask], Ye[mask], Ze[mask]]).T
         # initial sigma
         k = 0.25
-        #pix_lenght_ = sum([1./data.shape[0], 1./data.shape[1], 1./data.shape[2]])/3.
+        #if self.ndim==2: pix_lenght_ = sum([1./data.shape[0], 1./data.shape[1]])/2.
+        #if self.ndim==3: pix_lenght_ = sum([1./data.shape[0], 1./data.shape[1], 1./data.shape[2]])/3.
         sig_init = (pix_lenght/(2.*k))*np.ones(w_init.shape[0])
 
         # DBSAN to find isolated structures
@@ -169,31 +169,50 @@ class HDMClouds():
         if self.ndim==3: radio = np.sqrt(3)*pix_lenght
         db = DBSCAN(eps=radio, min_samples=4, n_jobs=-1)
         db.fit(mu_init)
+        db_labels = db.labels_ # predicted labels
+        print("[INFO] Number of ICEs: {0}".format(db_labels.max()+1))
 
-        # ensure that no -1 labels are present here!!!
-        if np.any(db.labels_==-1): print("-1 labels are present!")
+        # we train a KNN classifier with all the assigned points
+        assigned = mu_init[db_labels!=-1]
+        assigned_labels = db_labels[db_labels!=-1]
+        clf = KNeighborsClassifier(n_neighbors=3)
+        clf.fit(assigned, assigned_labels)
+
+        unassigned = mu_init[db_labels==-1]
+        if len(unassigned)>0:
+            print("[INFO] There are unassigned pixels: Automatically assigning to closer ICE\n")
+            unassigned_labels = clf.predict(unassigned)
+            db_labels[db_labels==-1] = unassigned_labels
+
+        # splitting boundary points by ICE
+        if bound_points is not None:
+            bp_labels = clf.predict(bound_points)
+        else: bp_labels = None
 
         # instantiating HDICE for each Isolated Cloud Entity
         hdice_list = list()
         hdice_dict = dict()
-        num_ice = db.labels_.max()+1
+        num_ice = db_labels.max()+1
 
         alph = string.ascii_uppercase
         if num_ice<=26:    hdice_keys = [alph[i%26] for i in range(num_ice)]
         elif num_ice<=676: hdice_keys = [alph[i//26]+alph[i%26] for i in range(num_ice)]
         else:              hdice_keys=  [alph[i//(26*26)]+alph[(i//26)%26]+alph[i%26] for i in range(num_ice)]
         
-        for i in range(db.labels_.max()+1):
-            _mask = db.labels_==i
+        for i in range(0, db_labels.max()+1):
+            _mask = db_labels==i
+            if bp_labels is not None: _bmask = bp_labels==i
             print("Isolated Cloud Entity {0}: {1} pixels of significant emission.".format(hdice_keys[i], np.sum(_mask)))
+
             if self.ndim==2:
-                hdice = HDICE(w_init[_mask], mu_init[_mask], sig_init[_mask], back_level, alpha, 
-                              lamb, compression, xgrid_global=xgrid, ygrid_global=ygrid)
+                hdice = HDICE(w_init[_mask], mu_init[_mask], sig_init[_mask], back_level, alpha, lamb, compression, 
+                              xgrid_global=xgrid, ygrid_global=ygrid, bound_points=bound_points[_bmask])
             if self.ndim==3:
-                hdice = HDICE(w_init[_mask], mu_init[_mask], sig_init[_mask], back_level, alpha, 
-                              lamb, compression, xgrid_global=xgrid, ygrid_global=ygrid, zgrid_global=zgrid)
+                hdice = HDICE(w_init[_mask], mu_init[_mask], sig_init[_mask], back_level, alpha, lamb, compression, 
+                              xgrid_global=xgrid, ygrid_global=ygrid, zgrid_global=zgrid, bound_points=None)
 
             hdice.set_f0(dfunc(hdice.eval_points))
+            if hdice.bound_points is not None: hdice.set_fb(dfunc(hdice.bound_points))
             hdice.set_fgrid(dfunc(hdice.grid_points))
             hdice_list.append(hdice)
             hdice_dict[hdice_keys[i]] = hdice
@@ -201,7 +220,7 @@ class HDMClouds():
         # visualizing the results of ICE
         if verbose:
             if self.ndim==2: 
-                gp.points_clusters(data, mu_init, db.labels_, hdice_keys, 
+                gp.points_clusters(data, mu_init, db_labels, hdice_keys, 
                                    wcs=wcs, title="Isolated Cloud Entities")
             if self.ndim==3:
                 pass
@@ -237,6 +256,8 @@ class HDMClouds():
                 print("#"*100)
                 gp.points_plot(data, points=mu_global, color="red", wcs=wcs, title="Gaussian centers")
                 gp.points_plot(data, points=eval_points_global, color="blue", wcs=wcs, title="Evaluation Points")
+                if bound_points is not None:
+                    gp.points_plot(data, points=bound_points, color="green", wcs=wcs, title="Boundary Points")
             if self.ndim==3:
                 pass
 
@@ -266,7 +287,6 @@ class HDMClouds():
         self.elapsed_time = None
         self.residual_stats = None
 
-
     def coord2world(self, xcoord, ycoord):
         # we first transform from our internal coordinate
         # to a pixel position
@@ -280,7 +300,6 @@ class HDMClouds():
         angy = angy.to_string(unit=units.degree, sep=('deg', 'm', 's'))
         return angx,angy
 
-
     def set_params(self,w,sig):
         """
         Set the parameters of the global GM
@@ -288,13 +307,11 @@ class HDMClouds():
         self.w = w
         self.sig = sig
 
-
     def get_params(self):
         """
         Get the parameters of the global GM
         """
         return self.w,self.sig
-
 
     def normalized_w(self):
         """
@@ -307,8 +324,6 @@ class HDMClouds():
         w = w * (2*np.pi*sig**2)**(d/2.)
         return w
 
-
-
     def get_approximation(self):
         w,sig = self.get_params()
         if self.ndim==2:
@@ -317,8 +332,6 @@ class HDMClouds():
             u = gm_eval3d_2(w, sig, self.xc, self.yc, self.zc, self.xgrid, self.ygrid, self.zgrid, self.nn_ind, self.nn_ind_aux)
         u = u.reshape(self.shape)
         return u
-
-
 
     def get_residual_stats(self, plot=True):
         u = self.get_approximation()
@@ -362,10 +375,7 @@ class HDMClouds():
         print("Variance of residual: {0}".format(out[1]))
         print("Normalized flux addition: {0}".format(out[2]))
         print("Normalized flux lost: {0}".format(out[3]))
-
         return out
-
-
 
     def prune(self):
         w = self.w
@@ -378,8 +388,6 @@ class HDMClouds():
         self.yc = self.yc[mask]
         self.w = self.w[mask]
         self.sig = self.sig[mask]
-   
-
     
     def summarize(self, solver_output=True, residual_stats=True, solution_plot=True,
                   params_plot=True, histograms_plot=True):
@@ -405,8 +413,6 @@ class HDMClouds():
             plt.hist(term1.ravel(), bins=10, facecolor='seagreen', edgecolor='black', lw=2)
             plt.title('u-f')
             plt.show()
-
-
 
     def build_gmr(self, max_nfev=None, verbose=True, tol=1.e-7):
         """
@@ -437,7 +443,6 @@ class HDMClouds():
         # storing the total elapsed time    
         self.elapsed_time = time.time() - t0
 
-
     def build_hierarchical_tree(self):
         for i,hdice in enumerate(self.hdice_list):
             print("Building the hierarchical tree for Isolated Cloud Entity {0}".format(self.hdice_keys[i]))
@@ -457,7 +462,6 @@ class HDMClouds():
         # original values are stored for the reset
         self.splittable_reset = sorted(splittable)
         self.joinable_reset = sorted(joinable)
-
 
     def split_ce(self, CEid):
         """
@@ -489,7 +493,6 @@ class HDMClouds():
             # podria ir un break?
         _joinable.append( (ice_key+"-"+str(idx1),ice_key+"-"+str(idx2)) )
         self.joinable = sorted(_joinable)
-
 
     def join_ce(self, CEid_tuple):
         CEid1,CEid2 = CEid_tuple
@@ -526,11 +529,9 @@ class HDMClouds():
                 break
         self.joinable.sort()
 
-
     def reset_hierarchical_tree(self):
         self.splittable = self.splittable_reset
         self.joinable = self.joinable_reset
-
 
     def compute_stats(self):
         stats = dict()
@@ -574,7 +575,6 @@ class HDMClouds():
                                     "Centroid Position (RA-Dec)"])
         return stats
 
-
     def visualize(self):
         def handler(hdmc, split="", join1="", join2="", reset=False, show_stats=False):
             if reset:
@@ -602,8 +602,9 @@ class HDICE():
     """
     Hierarchical Decomposition of Independent/Isolated Cloud Entities
     """
-    def __init__(self, w_init, mu_init, sig_init, back_level, alpha, lamb, compression, minsig=None, maxsig=None, 
-                 kappa=5., verbose=False, xgrid_global=None, ygrid_global=None, zgrid_global=None):
+    def __init__(self, w_init, mu_init, sig_init, back_level, alpha, lamb, compression, 
+                 minsig=None, maxsig=None, kappa=5., verbose=False, xgrid_global=None, 
+                 ygrid_global=None, zgrid_global=None, bound_points=None, min_num_gaussians=3):
 
         self.ndim = mu_init.shape[1]
         # Max intensity in the CE
@@ -619,8 +620,16 @@ class HDICE():
         if self.ndim==2: grid_points_global = np.vstack([xgrid_global,ygrid_global]).T
         if self.ndim==3: grid_points_global = np.vstack([xgrid_global,ygrid_global,zgrid_global]).T
 
+        # boundary points
+        if bound_points is not None:
+            xb = bound_points[:,0]
+            yb = bound_points[:,1]
+            if self.ndim==3: zb = bound_points[:,2]
+        else:
+            xb = None; yb = None; zb = None
+
         # target number of gaussians
-        n_gaussians = int(len(w_init)*compression)
+        n_gaussians = max(int(len(w_init)*compression), min_num_gaussians)
 
         w_red, mu_red, cov_red = mixture_reduction(w_init, mu_init, sig_init, 2*n_gaussians, verbose=False)
         xe = mu_red[:,0]
@@ -641,13 +650,21 @@ class HDICE():
         maxsig = 3*np.max(np.abs(sig))
         epsilon = 1e-6 # little shift to avoid NaNs in inv_sig_mapping
 
+        #######################################
+        # Computing neighborhoods
+        #######################################
+
         nn_indexes,nn_indexes_aux = compute_neighbors(center_points, eval_points, kappa*maxsig)
         self.nn_ind1 = nn_indexes
         self.nn_ind1_aux = nn_indexes_aux
 
-        #neigh_indexes,neigh_indexes_aux = compute_neighbors(mu_red, points_bound, 5*np.max(sig_red))
-        #self.nind2 = neigh_indexes
-        #self.nind_aux2 = neigh_indexes_aux
+        if bound_points is not None:
+            nn_indexes,nn_indexes_aux = compute_neighbors(center_points, bound_points, kappa*maxsig)
+            self.nn_ind2 = nn_indexes
+            self.nn_ind2_aux = nn_indexes_aux
+        else:
+            self.nn_ind2 = None
+            self.nn_ind2_aux = None
 
         nn_indexes,nn_indexes_aux = compute_neighbors(center_points, grid_points, kappa*maxsig)
         self.nn_ind3 = nn_indexes
@@ -656,7 +673,6 @@ class HDICE():
         nn_indexes,nn_indexes_aux = compute_neighbors(center_points, grid_points_global, kappa*maxsig)
         self.nn_ind4 = nn_indexes
         self.nn_ind4_aux = nn_indexes_aux
-
 
         if self.ndim==2:
             # normalizing w
@@ -667,45 +683,53 @@ class HDICE():
             u = gm_eval3d_2(w, sig, xc, yc, zc, xgrid, ygrid, zgrid, self.nn_ind3, self.nn_ind3_aux)
             w *= data_max/u.max()
 
-
         ########################################
         # HDICE internals
         ########################################
 
         # data values at the position of center_points and grid_points
         self.f0 = None
+        self.fb = None
         self.fgrid = None
+
         # center points
         self.xc = xc; self.yc = yc 
         if self.ndim==3: self.zc = zc
         self.center_points = center_points
+
         # boundary points
-        #self.xb = xb; self.yb = yb
-        #if self.ndim==3: self.zb = zb
+        self.xb = xb; self.yb = yb
+        if self.ndim==3: self.zb = zb
+        self.bound_points = bound_points
+
         # evaluation points
         self.xe = xe; self.ye = ye
         if self.ndim==3: self.ze = ze
         self.eval_points = eval_points
+
         # local grid points
         self.xgrid = xgrid; self.ygrid = ygrid
         if self.ndim==3: self.zgrid = zgrid
         self.grid_points = grid_points
+
         # global grid points
         self.xgrid_global = xgrid_global
         self.ygrid_global = ygrid_global
         if self.ndim==3: self.zgrid_global = zgrid_global
         self.grid_points_global = grid_points_global
+
         # minimal and maximal extend of gaussians
         self.minsig = minsig
         self.maxsig = maxsig
         self.kappa = kappa
+
         # optimization parameters
         self.w0 = np.copy(w)
         self.w = np.sqrt(w)
         self.sig0 = np.copy(sig)
         self.sig = inv_sig_mapping(sig+epsilon, minsig, maxsig)
+
         # some other useful data
-        self.d1psi1 = d1psi1
         self.alpha = alpha
         self.lamb = lamb
         self.back_level = back_level
@@ -713,23 +737,23 @@ class HDICE():
         self.scipy_tol = None
         self.elapsed_time = None
         self.residual_stats = None
+
         # hierarchical tree data structures
         self.decomp_dict = None
         self.join_dict = None
         self.entity_dict = None
 
-
     def set_f0(self, f0):
         self.f0 = f0
 
+    def set_fb(self, fb):
+        self.fb = fb
 
     def set_fgrid(self, fgrid):
         self.fgrid = fgrid
 
-
     def set_w(self, w):
         self.w = w
-
 
     def set_sig(self, sig):
         self.sig = sig
@@ -757,7 +781,6 @@ class HDICE():
         sig = sig_mapping(self.sig, self.minsig, self.maxsig)
         return w,sig
 
-
     def get_params_filtered(self, indexes):
         """
         Some explanation
@@ -781,8 +804,6 @@ class HDICE():
         if self.ndim==2: return ret_xc,ret_yc,ret_w,ret_sig
         if self.ndim==3: return ret_xc,ret_yc,ret_zc,ret_w,ret_sig
 
-
-
     def normalized_w(self):
         """
         Get the mapping from the 'c' coefficients in the linear
@@ -793,7 +814,6 @@ class HDICE():
         d = self.ndim
         w = w * (2*np.pi*sig**2)**(d/2.)
         return w
-
 
     def get_approximation(self, params=None):
         if params is None:
@@ -810,7 +830,6 @@ class HDICE():
             u = gm_eval3d_2(w, sig, xc, yc, zc, self.xgrid, self.ygrid, self.zgrid, self.nn_ind3, self.nn_ind3_aux)
         return u
 
-
     def get_approximation_global(self, params=None):
         if params is None:
             w,sig = self.get_params_mapped()
@@ -825,7 +844,6 @@ class HDICE():
         if self.ndim==3:
             u = gm_eval3d_2(w, sig, xc, yc, zc, self.xgrid_global, self.ygrid_global, self.zgrid_global, self.nn_ind4, self.nn_ind4_aux)
         return u
-
 
     def get_residual_stats(self, plot=True):
         u = self.get_approximation()
@@ -851,7 +869,6 @@ class HDICE():
 
         return out
 
-
     def prune(self):
         w = self.w
         mean = np.mean(w)
@@ -864,7 +881,6 @@ class HDICE():
         self.w = self.w[mask]
         self.sig = self.sig[mask]
 
-
     def solver_output(self):
         if self.scipy_sol is not None:
             print('Solver Output:')
@@ -875,7 +891,6 @@ class HDICE():
             print("xtol: {0}".format(self.scipy_tol))
             print("ftol: {0}".format(self.scipy_tol))
          
-
     def summarize(self, solver_output=True, residual_stats=True, solution_plot=True,
                   params_plot=True, histograms_plot=True):
         print('\n \n' + '#'*90)    
@@ -900,7 +915,6 @@ class HDICE():
             plt.hist(term1.ravel(), bins=10, facecolor='seagreen', edgecolor='black', lw=2)
             plt.title('u-f')
             plt.show()
-
             
     def F(self, params):
         N = len(params)//2
@@ -915,24 +929,22 @@ class HDICE():
         if self.ndim==3:
             u = gm_eval3d_2(w, sig, self.xc, self.yc, self.zc, self.xe, self.ye, self.ze, self.nn_ind1, self.nn_ind1_aux)
 
-        # evaluation of the EL equation
-        f0 = self.f0
+        # evaluation of the EL equation (2*(u-f0) + alpha*d1psi1(u-f0))
         alpha = self.alpha; lamb = self.lamb
-        tmp1 = ne.evaluate('u-f0')
-        tmp2 = self.d1psi1(tmp1, lamb)
-        el = ne.evaluate('2*tmp1 + alpha*tmp2')
-            
-        # evaluating at the boundary
-        #fb = self.fb
-        #u_boundary = gm_eval_fast(w, sig, self.xc, self.yc, self.xb, self.yb, self.nind2, self.nind_aux2)
-        #if self.ndim==2:
-        #    u_boundary = gm_eval2d_1(w, sig, self.xc, self.yc, self.xb, self.yb)
-        #if self.ndim==3:
-        #    u_boundary = gm_eval3d_1(w, sig, self.xc, self.yc, self.zc, self.xb, self.yb, self.zb)
-        
-        #return np.concatenate([el,u_boundary-fb])
-        return el
+        el = u-self.f0
+        if alpha>0.: flux_term = alpha*d1psi1(el, lamb)
+        el *= 2
+        if alpha>0.: el += flux_term
 
+        # evaluating at the boundary, if not None
+        if self.bound_points is not None:
+            fb = self.fb
+            if self.ndim==2:
+                u_boundary = gm_eval2d_2(w, sig, self.xc, self.yc, self.xb, self.yb, self.nn_ind2, self.nn_ind2_aux)
+            if self.ndim==3:
+                u_boundary = gm_eval3d_2(w, sig, self.xc, self.yc, self.zc, self.xb, self.yb, self.zb, self.nn_ind2, self.nn_ind2_aux)
+            return np.concatenate([el,u_boundary-fb])
+        return el
 
     def build_gmr(self, max_nfev=None, tol=1.e-7):
         """
@@ -967,7 +979,6 @@ class HDICE():
         # storing results    
         self.scipy_sol = sol
         self.elapsed_time = time.time() - t0
-
 
     def build_htree(self):
         w,sig = self.get_params_mapped()
