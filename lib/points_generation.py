@@ -1,108 +1,7 @@
-import ghalton
-import copy
+import numba
 import numpy as np
 import numpy.ma as ma
-import scipy.stats as st
-
-
-def _inv_gaussian_kernel(kernlen=3, sig=0.1):
-    """
-    Returns a 2D Gaussian kernel array.
-    """
-    interval = (2*sig+1.)/(kernlen)
-    x = np.linspace(-sig-interval/2., sig+interval/2., kernlen+1)
-    kern1d = np.diff(st.norm.cdf(x))
-    kernel_raw = np.sqrt(np.outer(kern1d, kern1d))
-    kernel = kernel_raw/kernel_raw.sum()
-    return kernel.max()-kernel
-
-
-def random_centers_generation(data, n_centers, back_level=None, power=2., umask=None):
-    """
-    DEPRECATED!
-    """
-
-    # fixed seed
-    np.random.seed(0)
-
-    # for safety reasons
-    data = copy.deepcopy(data)
-
-    # unusable pixels mask
-    if back_level is not None:
-        mask = data <= back_level
-        if umask is not None:
-            mask = np.logical_or(mask, umask)
-        if isinstance(mask, np.ma.masked_array):
-            mask.fill_value = True
-            mask = mask.filled()
-        if np.sum(~mask) < n_centers:
-            print('The number of usable pixels is less than n_centers')
-            return None
-
-    # applying power and re-normalizing
-    data **= power
-    data /= data.max()
-
-    # data cube dimensions
-    m,n = data.shape
-    
-    # center points positions
-    x = np.linspace(0., 1., m+2, endpoint=True)[1:-1]
-    y = np.linspace(0., 1., n+2, endpoint=True)[1:-1]
-    X,Y  = np.meshgrid(x, y, indexing='ij')
-    points_positions = np.vstack( [ X.ravel(), Y.ravel() ]).T
-    
-    # array with indexes of such centers
-    points_indexes = np.arange(0, points_positions.shape[0])
-    
-    # array with probabilities of selection for each center
-    if isinstance(data, np.ma.masked_array):
-        data.fill_value = 0.
-        data = data.filled()
-    if isinstance(mask, np.ndarray):
-        data[mask] = 0.
-        prob = data/data.sum()
-    else:
-        prob = data/data.sum()
-    
-    # convolution kernel
-    #K = np.array([[0.5, 0.5, 0.5], [0.5, 0., 0.5], [0.5, 0.5, 0.5]])
-    K = _inv_gaussian_kernel(kernlen=3, sig=3.)
-    
-    selected = []
-    while len(selected)!=n_centers:
-        sel = np.random.choice(points_indexes, size=1 , p=prob.ravel(), replace=False)[0]
-        # border pixels can't be selected
-        index0 = sel // m
-        index1 = sel % n
-        if index0==0 or index0==m-1 or index1==0 or index1==n-1: continue
-        selected.append(sel)
-        # update the pixel probabilities array
-        prob[index0-1:index0+2, index1-1:index1+2] *= K
-        #prob[index0, index1] = 0.
-        prob /= prob.sum()
-        
-    return points_positions[selected]
-
-
-def qrandom_centers_generation(dfunc, n_points, tol=0.005, ndim=2, get_size=50, mask=None):
-    # generating the sequencer
-    sequencer = ghalton.Halton(ndim)
-
-    points_positions = []
-    n_selected = 0
-
-    while True:
-        points = np.asarray(sequencer.get(get_size))
-        values = dfunc(points)
-
-        for i in range(get_size):
-            if values[i] > tol:
-                points_positions.append(points[i])
-                n_selected += 1
-            if n_selected == n_points:
-                return np.asarray(points_positions)
+from sklearn.neighbors import NearestNeighbors
 
 
 def boundary_map(mask):
@@ -148,60 +47,99 @@ def boundary_map_caa(pixel_map):
     return border_map
 
 
-def boundary_points_generation(data, mask, n_points, method='sampling'):
+def boundary_points_generation(data, mask, neigh_length=3):
     #fixed seed
-    np.random.seed(0)
+    np.random.seed(23)
     border_map = boundary_map(mask)
 
-    if method=='random':
-        x_pos, y_pos = np.where(border_map)
-        # mapping to [0,1] range
-        x_pos = x_pos.astype(float)
-        y_pos = y_pos.astype(float)
-        x_pos /= float(data.shape[0]); x_pos += 0.5/data.shape[0]
-        y_pos /= float(data.shape[1]); y_pos += 0.5/data.shape[1]
-        boundary_points =  np.vstack([x_pos, y_pos]).T
-        # random selecting the specified number of points
-        if n_points > boundary_points.shape[0]:
-            print("Number of points can't be greater than the number of border pixels")
-            return None
-        points_indexes = np.arange(boundary_points.shape[0])
-        selected = np.random.choice(points_indexes, size=n_points)
-        return boundary_points[selected]
+    m,n = data.shape
+    prob = np.zeros(border_map.shape)
+    prob[border_map] = 1./np.sum(border_map)
 
-    elif method=='sampling':
-        m,n = data.shape
-        prob = np.zeros(border_map.shape)
-        prob[border_map] = 1./np.sum(border_map)
-
-        # center points positions
-        _x = np.linspace(0., 1., m+1, endpoint=True)
-        _y = np.linspace(0., 1., n+1, endpoint=True)
-        x = np.asarray( [(_x[i]+_x[i+1])/2 for i in range(len(_x)-1)] )
-        y = np.asarray( [(_y[i]+_y[i+1])/2 for i in range(len(_y)-1)] )
-        X,Y  = np.meshgrid(x, y, indexing='ij')
-        points_positions = np.vstack( [ X.ravel(), Y.ravel() ]).T
-        
-        # array with indexes of such centers
-        points_indexes = np.arange(0, points_positions.shape[0])
-        selected = list()
-
-        while len(selected) != n_points:
-            try:
-                sel = np.random.choice(points_indexes, size=1 , p=prob.ravel(), replace=False)[0]
-            except ValueError:
-                print("No more points can be selected: Only {0} point from the {1} were selected.".format(len(selected), n_points))
-                return points_positions[selected]
-            # border pixels can't be selected
-            index0 = sel // m
-            index1 = sel % n
-            if index0==0 or index0==m-1 or index1==0 or index1==n-1: continue
-            selected.append(sel)
-            # update the pixel probabilities array
-            prob[index0-3:index0+4, index1-3:index1+4] *= 0.
-            prob /= prob.sum()
-        return points_positions[selected]
+    # all points positions
+    pix_lenght = 1./max(data.shape)
+    _x = (data.shape[0]*pix_lenght) * np.linspace(0., 1., data.shape[0]+1, endpoint=True)
+    _y = (data.shape[1]*pix_lenght) * np.linspace(0., 1., data.shape[1]+1, endpoint=True)
+    x = np.asarray( [(_x[i]+_x[i+1])/2 for i in range(len(_x)-1)] )
+    y = np.asarray( [(_y[i]+_y[i+1])/2 for i in range(len(_y)-1)] )
+    X,Y  = np.meshgrid(x, y, indexing='ij')
+    points_positions = np.vstack( [ X.ravel(), Y.ravel() ]).T
     
-    else:
-        print("Invalid method")
-        return None
+    # array with indexes of such centers
+    points_indexes = np.arange(0, points_positions.shape[0])
+    selected = list()
+
+    while prob.sum()>0:
+        # update prob array, to make it sum 1
+        prob /= prob.sum()
+        try:
+            sel = np.random.choice(points_indexes, size=1 , p=prob.ravel(), replace=False)[0]
+        except ValueError:
+            print("No more points can be selected: {0} boundary points".format(len(sel)))
+
+        # border pixels can't be selected
+        index0 = sel // m
+        index1 = sel % n
+        if index0==0 or index0==m-1 or index1==0 or index1==n-1: continue
+        selected.append(sel)
+
+        # update the pixel probabilities array
+        nl = neigh_length
+        prob[index0-nl:index0+(nl+1), index1-nl:index1+(nl+1)] *= 0.
+
+    return points_positions[selected]
+
+
+def boundary_points_generation(data, mask, neigh_length=5):
+    # all points positions
+    pix_lenght = 1./max(data.shape)
+    _x = (data.shape[0]*pix_lenght) * np.linspace(0., 1., data.shape[0]+1, endpoint=True)
+    _y = (data.shape[1]*pix_lenght) * np.linspace(0., 1., data.shape[1]+1, endpoint=True)
+    x = np.asarray( [(_x[i]+_x[i+1])/2 for i in range(len(_x)-1)] )
+    y = np.asarray( [(_y[i]+_y[i+1])/2 for i in range(len(_y)-1)] )
+    X,Y  = np.meshgrid(x, y, indexing='ij')
+
+    # Obtaining the boundary points through the border_map
+    border_map = boundary_map(mask)
+    xbound = X[border_map]
+    ybound = Y[border_map]
+    bound_points = np.vstack([xbound,ybound]).T
+
+    # Nearest neighbor object over the boundary points: 
+    # When searching for bound_point, it will reach the point itself + neigh_length other points
+    nn = NearestNeighbors(n_neighbors=neigh_length+1, algorithm='ball_tree', n_jobs=-1)
+    nn.fit(bound_points)
+    nn_indices = nn.kneighbors(bound_points, return_distance=False)
+
+    # array of probabilities (all boundary points have the same prob at start)
+    prob = np.ones(bound_points.shape[0])
+    prob /= len(bound_points)
+
+    # array with indexes of such centers
+    points_indexes = np.arange(0, bound_points.shape[0])
+    selected = list()
+
+    # fixed seed for reproducibility
+    np.random.seed(23)
+
+    while prob.sum()>0:
+        # update prob array, to make it sum 1
+        prob /= prob.sum()
+        try:
+            sel = np.random.choice(points_indexes, size=1 , p=prob, replace=False)[0]
+        except ValueError:
+            print("No more points can be selected: {0} boundary points".format(len(selected)))
+            return np.asarray(selected)
+
+        # nearest neighbors of selected point
+        sel_nn_indices = nn_indices[sel]
+
+        # The probability of selected point and its neighbors is set to 0
+        prob[sel_nn_indices] = 0.
+
+        # added to the list of selected boundary points
+        selected.append(bound_points[sel])
+
+    return np.asarray(selected)
+
+
