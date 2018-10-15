@@ -1,2 +1,2 @@
-# HDSources--
-An Improved Hierarchical Decomposition of Sources Method
+# HDCLouds 
+An Improved Hierarchical Decomposition of Molecular Clouds Based on Gaussian Mixtures
