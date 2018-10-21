@@ -102,14 +102,14 @@ def _compute_neighbors(double[:,:] mu_center, int n_neighbors):
     return nn,nn_indexes.astype(np.int32) 
 
 
-cdef void sort_by_indexes1(int[:] array, int[:] indexes): 
+cdef void sort_by_indexes1(int[:] array, long[:] indexes): 
     cdef int i
     cdef int n = array.shape[0]
     for i in range(n):
         array[i] = array[indexes[i]]
 
 
-cdef void sort_by_indexes2(double[:] array, int[:] indexes): 
+cdef void sort_by_indexes2(double[:] array, long[:] indexes): 
     cdef int i,j
     cdef int n = array.shape[0]
     for i in range(n):
@@ -120,7 +120,7 @@ def build_diss_matrix(double[:] w, double[:,:] mu, double[:,:,:] cov, int[:,:] n
     cdef int i,j,jj
     cdef int M = nn_indexes.shape[0]
     cdef int max_neigh = nn_indexes.shape[1]
-    cdef int[:]  sorted_indexes
+    cdef long[:]  sorted_indexes
     cdef double[:,:] diss_matrix = np.inf*np.ones((M,max_neigh),dtype=np.float64)
     for i in range(M):
         for j in range(max_neigh):
@@ -222,7 +222,7 @@ def update_structs(int[:,:] nn_indexes, double[:,:] diss_matrix, double[:] w, do
         else:
             diss_matrix[nindex,j] = np.inf
 
-    cdef int[:] sorted_indexes = np.argsort(diss_matrix[nindex,:])
+    cdef long[:] sorted_indexes = np.argsort(diss_matrix[nindex,:])
     sort_by_indexes1(nn_indexes[nindex,:], sorted_indexes)
     sort_by_indexes2(diss_matrix[nindex,:], sorted_indexes)
 

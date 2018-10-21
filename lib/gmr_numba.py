@@ -39,13 +39,13 @@ def _det(X):
 
 
 
-@numba.jit('float64 (float64[:], float64[:], float64[:,:])', nopython=True, nogil=True)
-def normal(x, mu, cov):
-    """
-    Normal distribution with parameters mu (mean) and cov (covariance matrix)
-    """
-    d = mu.shape[0]
-    return (1./np.sqrt((2.*np.pi)**d * np.linalg.det(cov))) * np.exp(-0.5*np.dot(x-mu, np.dot(np.linalg.inv(cov), x-mu)))
+#@numba.jit('float64 (float64[:], float64[:], float64[:,:])', nopython=True, nogil=True)
+#def normal(x, mu, cov):
+#    """
+#    Normal distribution with parameters mu (mean) and cov (covariance matrix)
+#    """
+#    d = mu.shape[0]
+#    return (1./np.sqrt((2.*np.pi)**d * np.linalg.det(cov))) * np.exp(-0.5*np.dot(x-mu, np.dot(np.linalg.inv(cov), x-mu)))
 
 
 
@@ -139,19 +139,19 @@ def KLdiv(w1, mu1, cov1, w2, mu2, cov2):
 
 
 
-@numba.jit('float64 (float64, float64[:], float64[:,:], float64, float64[:], float64[:,:])', nopython=True, nogil=True)
-def isd_diss(w1, mu1, cov1, w2, mu2, cov2):
-    """
-    Computes the ISD (Integral Square Difference between components [(w1,mu1,cov1), (w2,mu2,cov2)])
-    and its moment preserving merge. Ref: Cost-Function-Based Gaussian Mixture Reduction for Target Tracking
-    """
-    w_m, mu_m, cov_m = merge(w1, mu1, cov1, w2, mu2, cov2)
-    Jhr = w1*w_m * normal(mu1, mu_m, cov1+cov_m) + w2*w_m * normal(mu2, mu_m, cov2+cov_m)
-    Jrr = w_m**2 * (1./np.sqrt((2*np.pi)**2 * np.linalg.det(2*cov_m)))
-    Jhh = (w1**2)*(1./np.sqrt((2*np.pi)**2 * np.linalg.det(2*cov1))) + \
-          (w2**2)*(1./np.sqrt((2*np.pi)**2 * np.linalg.det(2*cov2))) + \
-          2*w1*w2*normal(mu1, mu2, cov1+cov2)
-    return Jhh - 2*Jhr + Jrr
+#@numba.jit('float64 (float64, float64[:], float64[:,:], float64, float64[:], float64[:,:])', nopython=True, nogil=True)
+#def isd_diss(w1, mu1, cov1, w2, mu2, cov2):
+#    """
+#    Computes the ISD (Integral Square Difference between components [(w1,mu1,cov1), (w2,mu2,cov2)])
+#    and its moment preserving merge. Ref: Cost-Function-Based Gaussian Mixture Reduction for Target Tracking
+#    """
+#    w_m, mu_m, cov_m = merge(w1, mu1, cov1, w2, mu2, cov2)
+#    Jhr = w1*w_m * normal(mu1, mu_m, cov1+cov_m) + w2*w_m * normal(mu2, mu_m, cov2+cov_m)
+#    Jrr = w_m**2 * (1./np.sqrt((2*np.pi)**2 * np.linalg.det(2*cov_m)))
+#    Jhh = (w1**2)*(1./np.sqrt((2*np.pi)**2 * np.linalg.det(2*cov1))) + \
+#          (w2**2)*(1./np.sqrt((2*np.pi)**2 * np.linalg.det(2*cov2))) + \
+#          2*w1*w2*normal(mu1, mu2, cov1+cov2)
+#    return Jhh - 2*Jhr + Jrr
 
 # @numba.jit('float64 (float64[:], float64[:,:], float64[:,:,:])', nopython=True, nogil=True)
 # def isd_diss_full(w, mu, sig):

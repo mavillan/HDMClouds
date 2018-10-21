@@ -6,8 +6,8 @@ import platform
 import numpy as np
 
 ext_modules=[
-    Extension("gmr_cython",
-              ["gmr_cython.pyx"],
+    Extension("gmr",
+              ["gmr.pyx"],
               libraries=["m"],
               extra_compile_args = ["-O3", "-ffast-math", "-march=native", "-fopenmp"],
               extra_link_args = ['-fopenmp'],
@@ -16,7 +16,7 @@ ext_modules=[
 ]
 
 setup( 
-  name = "gmr_cython",
+  name = "gmr",
   cmdclass = {"build_ext": build_ext},
   ext_modules = ext_modules,
   include_dirs = [np.get_include()]
