@@ -4,7 +4,6 @@ import scipy
 import numpy as np
 import numpy.ma as ma
 import scipy as sp
-import numexpr as ne
 from math import sqrt, exp
 from scipy.interpolate import RegularGridInterpolator
 from sklearn.neighbors import NearestNeighbors
