@@ -1,5 +1,12 @@
-ghalton
-specutils
+cython 
+numba 
+astropy 
+matplotlib 
+ipython 
+jupyter 
+jupyterlab 
+scikit-learn 
+scikit-image 
+pandas 
+scipy
 spectral-cube
-radio-beam
-
