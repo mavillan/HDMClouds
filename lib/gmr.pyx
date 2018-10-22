@@ -4,13 +4,14 @@
 #cython: nonecheck=False
 #cython: cdivision=True 
 #cython: infer_types=True
+import time
 import copy
 import numpy as np
 cimport numpy as np
 from sklearn.neighbors import NearestNeighbors
 
 from libc.math cimport exp,cos,sin,pi,sqrt,log
-from cython.parallel import prange
+#from cython.parallel import prange
 
 ii32 = np.iinfo(np.int32)
 cdef int MAXINT = ii32.max
@@ -85,7 +86,7 @@ cdef inline double KLdiv(double w1, double[:] mu1, double[:,:] cov1,
 
 
 def _compute_neighbors(double[:,:] mu_center, int n_neighbors):
-    nn = NearestNeighbors(algorithm="ball_tree", n_jobs=-1)
+    nn = NearestNeighbors(algorithm="kd_tree", n_jobs=-1)
     nn.fit(mu_center)
     nn_indexes = nn.kneighbors(mu_center, n_neighbors=n_neighbors+1, return_distance=False)
     # first column removed, since correspond to the index of the same row
@@ -174,11 +175,12 @@ cdef update_merge_mapping(int[:] merge_mapping, int nindex, int dindex):
 def neighbors_search(nn, mu, n_neighbors, merge_mapping, nindex):
     if len(mu)==2: radius=np.sqrt(2)
     if len(mu)==3: radius=np.sqrt(3)
-    dist,ind = nn.radius_neighbors([mu], radius=radius, return_distance=True)
-    dist = dist[0]; ind = ind[0]
+    #dist,ind = nn.kneighbors([mu], n_neighbors=2*n_neighbors, return_distance=False)
+    neigh_array = nn.kneighbors([mu], n_neighbors=2*n_neighbors, return_distance=False)
+    #dist = dist[0]; ind = ind[0]
     # sorting the results
-    sorted_indexes = np.argsort(dist)
-    neigh_array = ind[sorted_indexes]
+    #sorted_indexes = np.argsort(dist)
+    #neigh_array = ind[sorted_indexes]
     # applying the mapping
     neigh_array = merge_mapping[neigh_array]
     # removing repeated neighbors and mainting the order!
@@ -273,6 +275,8 @@ def mixture_reduction(w, mu, cov, n_comp=1, n_neighbors=None,
     
     # computing the initial dissimilarity matrix
     diss_matrix= build_diss_matrix(w, mu, cov, nn_indexes)
+    
+    cumtime = 0
 
     # main loop
     while cur_mixture_size>tar_mixture_size:
@@ -286,7 +290,11 @@ def mixture_reduction(w, mu, cov, n_comp=1, n_neighbors=None,
         w[nindex] = w_m; mu[nindex] = mu_m; cov[nindex] = cov_m
         indexes = np.delete(indexes, get_index(indexes,dindex))
         update_merge_mapping(merge_mapping, nindex, dindex)
+        t0 = time.time()
         nn_indexes[nindex] = neighbors_search(nn, mu_m, n_neighbors, merge_mapping, nindex)
+        t1 = time.time()
+        print(t1-t0)
+        cumtime += t1-t0
         update_structs(nn_indexes, diss_matrix, w, mu, cov, indexes, nindex, dindex)
 
         cur_mixture_size -= 1
@@ -303,7 +311,8 @@ def mixture_reduction(w, mu, cov, n_comp=1, n_neighbors=None,
             entity_key_mapping[nindex] = new_entity
             del entity_key_mapping[dindex]
             new_entity += 1
-
+    
+    print("cumtime",cumtime)
     if not build_htree: 
         return w[indexes],mu[indexes],cov[indexes]
     return decomp_dict,join_dict,entity_dict
