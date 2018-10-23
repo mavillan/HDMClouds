@@ -1,7 +1,7 @@
 import copy
 import numba
 import numpy as np
-from sklearn.neighbors import NearestNeighbors
+from sklearn.neighbors import BallTree
 
 ii32 = np.iinfo(np.int32)
 MAXINT = ii32.max
@@ -10,7 +10,7 @@ MAXINT = ii32.max
 # HELPER FUNCTIONS
 ################################################################
 
-@numba.jit('float64[:,:] (float64[:], float64[:])', nopython=True, nogil=True)
+@numba.jit('float64[:,:] (float64[:], float64[:])', nopython=True, fastmath=True, nogil=True)
 def _outer(x, y):
     """
     Computes the outer production between 1d-ndarrays x and y.
@@ -24,7 +24,7 @@ def _outer(x, y):
     return res
 
 
-@numba.jit('float64 (float64[:,:])', nopython=True, nogil=True)
+@numba.jit('float64 (float64[:,:])', nopython=True, fastmath=True, nogil=True)
 def _det(X):
     """
     Direct computation of determinant for matrices of size 2x2 and 3x3
@@ -39,45 +39,9 @@ def _det(X):
 
 
 
-#@numba.jit('float64 (float64[:], float64[:], float64[:,:])', nopython=True, nogil=True)
-#def normal(x, mu, cov):
-#    """
-#    Normal distribution with parameters mu (mean) and cov (covariance matrix)
-#    """
-#    d = mu.shape[0]
-#    return (1./np.sqrt((2.*np.pi)**d * np.linalg.det(cov))) * np.exp(-0.5*np.dot(x-mu, np.dot(np.linalg.inv(cov), x-mu)))
-
-
-
-def normalize(w, mu, cov):
-    pass
-
-
-def ncomp_finder(kl_hist, w_size=10):
-    """
-    Heuristic: If the actual diff is 1 order of magnitude
-    greater than the mean of the 10 last diff values, we 
-    consider this points as the estimate of the number of components
-    """
-    diff = np.diff(kl_hist)
-    diff -= diff.min()
-    diff /= diff.max()
-    reached_flag = False
-    
-    for i in range(w_size, len(diff)):
-        # If actual diff is 1 order of magnitude
-        if diff[i] > 10*np.mean(diff[i-w_size:i]):
-            reached_flag = True
-            break
-    if not reached_flag:
-        # in case of no high increase is detected
-        i += 1
-    return len(kl_hist)-i
-
-
-
 @numba.jit('Tuple((float64, float64[:], float64[:,:])) (float64, float64[:], \
-            float64[:,:], float64, float64[:], float64[:,:])', nopython=True, nogil=True)
+            float64[:,:], float64, float64[:], float64[:,:])', 
+            nopython=True, fastmath=True, nogil=True)
 def merge(w1, mu1, cov1, w2, mu2, cov2):
     """
     Computes the moment preserving merge of components (w1,mu1,cov1) and
@@ -90,7 +54,8 @@ def merge(w1, mu1, cov1, w2, mu2, cov2):
 
 
 @numba.jit('Tuple((float64, float64[:], float64[:,:])) (float64, float64[:], \
-            float64[:,:], float64, float64[:], float64[:,:])', nopython=True, nogil=True)
+            float64[:,:], float64, float64[:], float64[:,:])', 
+            nopython=True, fastmath=True, nogil=True)
 def isomorphic_merge(w1, mu1, cov1, w2, mu2, cov2):
     """
     Computes the isomorphic moment preserving merge of components (w1,mu1,cov1) and
@@ -105,7 +70,8 @@ def isomorphic_merge(w1, mu1, cov1, w2, mu2, cov2):
 
 
 @numba.jit('Tuple((float64, float64[:], float64[:,:])) (float64[:], \
-            float64[:,:], float64[:,:,:])', nopython=True, nogil=True)
+            float64[:,:], float64[:,:,:])', 
+            nopython=True, fastmath=True, nogil=True)
 def merge_full(w, mu, cov):
     n = mu.shape[0]
     d = mu.shape[1]
@@ -127,7 +93,8 @@ def merge_full(w, mu, cov):
 
 
 
-@numba.jit('float64 (float64, float64[:], float64[:,:], float64, float64[:], float64[:,:])', nopython=True, nogil=True)
+@numba.jit('float64 (float64, float64[:], float64[:,:], float64, float64[:], float64[:,:])', 
+           nopython=True, fastmath=True, nogil=True)
 def KLdiv(w1, mu1, cov1, w2, mu2, cov2):
     """
     Computation of the KL-divergence (dissimilarity) upper bound between components 
@@ -173,9 +140,13 @@ def KLdiv(w1, mu1, cov1, w2, mu2, cov2):
 
 @numba.jit('(float64[:,:], int32)')
 def _compute_neighbors(mu_center, n_neighbors):
-    nn = NearestNeighbors(algorithm="ball_tree", n_jobs=-1)
-    nn.fit(mu_center)
-    nn_indexes = nn.kneighbors(mu_center, n_neighbors=n_neighbors+1, return_distance=False)
+    BTree = BallTree(mu_center)
+    n_samples = mu_center.shape[0]
+    n_neighbors = min(n_neighbors+1, n_samples)
+    nn_indexes = BTree.query(mu_center, 
+                             k=n_neighbors, 
+                             return_distance=False, 
+                             sort_results=True)
     # first column removed, since correspond to the index of the same row
     nn_indexes = nn_indexes[:,1:]
     # removing pairs of repeated neighbors
@@ -185,11 +156,12 @@ def _compute_neighbors(mu_center, n_neighbors):
             jj = nn_indexes[i,j]
             if i>jj and np.any(i==nn_indexes[jj,:]):
                 nn_indexes[i,j] = MAXINT
-    return nn,nn_indexes.astype(np.int32)   
+    return BTree,nn_indexes.astype(np.int32)   
 
 
-@numba.jit('float64[:,:] (float64[:], float64[:,:], float64[:,:,:], int32[:,:])', nopython=True, nogil=True, parallel=True)
-def build_diss_matrix_nn(w, mu, cov, nn_indexes):
+@numba.jit('float64[:,:] (float64[:], float64[:,:], float64[:,:,:], int32[:,:])', 
+           nopython=True, fastmath=True, nogil=True, parallel=True)
+def build_diss_matrix(w, mu, cov, nn_indexes):
     M,max_neigh = nn_indexes.shape
     diss_matrix = np.empty((M,max_neigh),dtype=np.float64)
     diss_matrix[:,:] = np.inf
@@ -204,8 +176,9 @@ def build_diss_matrix_nn(w, mu, cov, nn_indexes):
     return diss_matrix
 
 
-@numba.jit('float64[:,:] (float64[:], float64[:,:], float64[:,:,:])', nopython=True, nogil=True, parallel=True)
-def build_diss_matrix_full(w, mu, cov):
+@numba.jit('float64[:,:] (float64[:], float64[:,:], float64[:,:,:])', 
+           nopython=True, fastmath=True, nogil=True, parallel=True)
+def _build_diss_matrix(w, mu, cov):
     M = len(w)
     diss_matrix = np.inf*np.ones((M,M))
     for i in numba.prange(M):
@@ -214,8 +187,9 @@ def build_diss_matrix_full(w, mu, cov):
     return diss_matrix
 
 
-@numba.jit('Tuple((int32,int32)) (float64[:,:], int32[:], int32[:,:])', nopython=True)
-def least_dissimilar_nn(diss_matrix, indexes, nn_indexes):
+@numba.jit('Tuple((int32,int32)) (float64[:,:], int32[:], int32[:,:])', 
+           nopython=True, fastmath=True)
+def least_dissimilar(diss_matrix, indexes, nn_indexes):
     # number of mixture components still alive
     max_neigh = diss_matrix.shape[1]
     i_min = -1; j_min = -1
@@ -233,8 +207,9 @@ def least_dissimilar_nn(diss_matrix, indexes, nn_indexes):
     return i_min,j_min
 
 
-@numba.jit('Tuple((int32,int32)) (float64[:,:], int32[:])', nopython=True)
-def least_dissimilar_full(diss_matrix, indexes):
+@numba.jit('Tuple((int32,int32)) (float64[:,:], int32[:])', 
+           nopython=True, fastmath=True)
+def _least_dissimilar(diss_matrix, indexes):
     # number of mixture components still alive
     i_min = -1; j_min = -1
     diss_min = np.inf
@@ -247,7 +222,7 @@ def least_dissimilar_full(diss_matrix, indexes):
     return i_min,j_min
 
 
-@numba.jit('int32 (int32[:], int32)', nopython=True, nogil=True)
+@numba.jit('int32 (int32[:], int32)', nopython=True, fastmath=True, nogil=True)
 def get_index(array, value):
     n = len(array)
     for i in range(n):
@@ -255,7 +230,7 @@ def get_index(array, value):
     return -1
 
 
-@numba.jit('(int32[:], int32, int32)', nopython=True, nogil=True)
+@numba.jit('(int32[:], int32, int32)', nopython=True, fastmath=True, nogil=True)
 def update_merge_mapping(merge_mapping, nindex, dindex):
     n = len(merge_mapping)
     for i in range(n):
@@ -263,15 +238,12 @@ def update_merge_mapping(merge_mapping, nindex, dindex):
             merge_mapping[i] = nindex
 
 
-@numba.jit()
-def radius_search(nn, mu, n_neighbors, merge_mapping, nindex):
-    if len(mu)==2: radius=np.sqrt(2)
-    if len(mu)==3: radius=np.sqrt(3)
-    dist,ind = nn.radius_neighbors([mu], radius=radius, return_distance=True)
-    dist = dist[0]; ind = ind[0]
-    # sorting the results
-    sorted_indexes = np.argsort(dist)
-    neigh_array = ind[sorted_indexes]
+#@numba.jit()
+def radius_search(BTree, mu, n_neighbors, merge_mapping, nindex):
+    # performing nn-search through BallTree
+    n_samples = BTree.data.shape[0]
+    k_query = min(2*n_neighbors, n_samples)
+    neigh_array = BTree.query([mu], k=k_query, return_distance=False, sort_results=True)[0]
     # applying the mapping
     neigh_array = merge_mapping[neigh_array]
     # removing repeated neighbors and mainting the order!
@@ -286,8 +258,9 @@ def radius_search(nn, mu, n_neighbors, merge_mapping, nindex):
     return ret
 
 
-@numba.jit('(int32[:,:], float64[:,:], float64[:], float64[:,:], float64[:,:,:], int32[:], int32, int32)', nopython=True, parallel=True)
-def update_structs_nn(nn_indexes, diss_matrix, w, mu, cov, indexes, nindex, dindex):
+@numba.jit('(int32[:,:], float64[:,:], float64[:], float64[:,:], float64[:,:,:], int32[:], int32, int32)',
+           nopython=True, fastmath=True, parallel=True)
+def update_structs(nn_indexes, diss_matrix, w, mu, cov, indexes, nindex, dindex):
     """
     Updates the nn_indexes and diss_matrix structs by removing the items
     corresponding to nindex and dindex
@@ -317,20 +290,9 @@ def update_structs_nn(nn_indexes, diss_matrix, w, mu, cov, indexes, nindex, dind
     nn_indexes[nindex,:] = (nn_indexes[nindex,:])[sorted_indexes]
 
 
-# @numba.jit('(float64[:,:], float64[:], float64[:,:], float64[:,:,:], int32[:], int32)', nopython=True, parallel=True)
-# def update_structs_full(diss_matrix, w, mu, cov, indexes, nindex):
-#     # the dissimilarity between the added Gaussian and the alive Gaussians are re-computed
-#     for j in indexes:
-#         if j==nindex: continue
-#         # the below update is done to respect the diss_matrix structure:
-#         # only the KLdiv between minor_index -> major_index is present
-#         if nindex<j:
-#             diss_matrix[nindex,j] = KLdiv(w[nindex],mu[nindex],cov[nindex],w[j],mu[j],cov[j])
-#         elif nindex>j:
-#             diss_matrix[j,nindex] = KLdiv(w[j],mu[j],cov[j],w[nindex],mu[nindex],cov[nindex])
-
-@numba.jit('(float64[:,:], float64[:], float64[:,:], float64[:,:,:], int32[:], int32)', nopython=True, parallel=True)
-def update_structs_full(diss_matrix, w, mu, cov, indexes, nindex):
+@numba.jit('(float64[:,:], float64[:], float64[:,:], float64[:,:,:], int32[:], int32)', 
+           nopython=True, fastmath=True, parallel=True)
+def _update_structs(diss_matrix, w, mu, cov, indexes, nindex):
     # the dissimilarity between the added Gaussian and the alive Gaussians are re-computed
     for j in indexes:
         if j==nindex: 
@@ -385,16 +347,16 @@ def mixture_reduction(w, mu, cov, n_comp=1, n_neighbors=None,
         if d==3: n_neighbors=24
 
     indexes = np.arange(cur_mixture_size, dtype=np.int32)
-    nn,nn_indexes = _compute_neighbors(mu,n_neighbors)
+    BTree,nn_indexes = _compute_neighbors(mu,n_neighbors)
 
     # idea: keep track that the k-th component was merged into the l-th positon
     merge_mapping = np.arange(cur_mixture_size, dtype=np.int32)
     
     # computing the initial dissimilarity matrix
-    diss_matrix= build_diss_matrix_nn(w, mu, cov, nn_indexes)
+    diss_matrix= build_diss_matrix(w, mu, cov, nn_indexes)
 
     # main loop
-    while cur_mixture_size>tar_mixture_size:
+    while cur_mixture_size > tar_mixture_size:
         # if cur_mixture_size<=break_point:
         #     # full GMR for improved accuracy
         #     i_min,j_min = least_dissimilar_full(diss_matrix, indexes)
@@ -408,7 +370,7 @@ def mixture_reduction(w, mu, cov, n_comp=1, n_neighbors=None,
         #     update_structs_full(diss_matrix, w, mu, cov, indexes, nindex)
 
         # approximated GMR for improved performance
-        i_min,j_min = least_dissimilar_nn(diss_matrix, indexes, nn_indexes)
+        i_min,j_min = least_dissimilar(diss_matrix, indexes, nn_indexes)
         w_m, mu_m, cov_m = merge(w[i_min], mu[i_min], cov[i_min], 
                              w[j_min], mu[j_min], cov[j_min])
         # updating structures
@@ -417,8 +379,8 @@ def mixture_reduction(w, mu, cov, n_comp=1, n_neighbors=None,
         w[nindex] = w_m; mu[nindex] = mu_m; cov[nindex] = cov_m
         indexes = np.delete(indexes, get_index(indexes,dindex))
         update_merge_mapping(merge_mapping, nindex, dindex)
-        nn_indexes[nindex] = radius_search(nn, mu_m, n_neighbors, merge_mapping, nindex)
-        update_structs_nn(nn_indexes, diss_matrix, w, mu, cov, indexes, nindex, dindex)
+        nn_indexes[nindex] = radius_search(BTree, mu_m, n_neighbors, merge_mapping, nindex)
+        update_structs(nn_indexes, diss_matrix, w, mu, cov, indexes, nindex, dindex)
 
         cur_mixture_size -= 1
         if verbose: print('{2}: Merged components {0} and {1}'.format(i_min, j_min, cur_mixture_size)) 
