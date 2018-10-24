@@ -2,6 +2,7 @@ import numba
 import numpy as np
 import numpy.ma as ma
 from sklearn.neighbors import NearestNeighbors
+from skimage.morphology import binary_closing,remove_small_holes,square
 
 
 def boundary_map(mask):
@@ -47,7 +48,7 @@ def boundary_map_caa(pixel_map):
     return border_map
 
 
-def boundary_points_generation(data, mask, neigh_length=3):
+def _boundary_points_generation(data, mask, neigh_length=3):
     #fixed seed
     np.random.seed(23)
     border_map = boundary_map(mask)
@@ -90,7 +91,11 @@ def boundary_points_generation(data, mask, neigh_length=3):
     return points_positions[selected]
 
 
-def boundary_points_generation(data, mask, neigh_length=5):
+def boundary_points_generation(data, mask, bound_spacing):
+    # dilating the region of usable pixels
+    square2 = square(2)
+    mask = binary_closing(mask, selem=square2)
+    
     # all points positions
     pix_lenght = 1./max(data.shape)
     _x = (data.shape[0]*pix_lenght) * np.linspace(0., 1., data.shape[0]+1, endpoint=True)
@@ -107,9 +112,9 @@ def boundary_points_generation(data, mask, neigh_length=5):
 
     # Nearest neighbor object over the boundary points: 
     # When searching for bound_point, it will reach the point itself + neigh_length other points
-    nn = NearestNeighbors(n_neighbors=neigh_length+1, algorithm='ball_tree', n_jobs=-1)
+    nn = NearestNeighbors(algorithm='ball_tree', n_jobs=-1)
     nn.fit(bound_points)
-    nn_indices = nn.kneighbors(bound_points, return_distance=False)
+    nn_indices = nn.radius_neighbors(bound_points, radius=bound_spacing, return_distance=False)
 
     # array of probabilities (all boundary points have the same prob at start)
     prob = np.ones(bound_points.shape[0])
