@@ -60,7 +60,7 @@ class HDMClouds():
     Hierarchical Decomposition of Molecular Clouds
     """
     def __init__(self, data, freq=None, n_gaussians=250, alpha=0., lamb=1., back_level=None,
-        minsig=None, maxsig=None, kappa=5., verbose=False, wcs=None):
+        minsig=None, maxsig=None, kappa=5., bound_spacing=None, verbose=False, wcs=None):
 
         #############################################################
         # Preprocessing: Estimation of back_level, computing mask, 
@@ -143,7 +143,9 @@ class HDMClouds():
         # Computing boundary points
         #######################################
         if self.ndim==2:
-            bound_points = boundary_points_generation(data, mask, neigh_length=2    )
+            if bound_spacing is None:
+                bound_spacing = 2.5*pix_lenght
+            bound_points = boundary_points_generation(data, mask, bound_spacing)
             xb = bound_points[:,0]; yb = bound_points[:,1]
         if self.ndim==3:
             xb = None; yb = None; zb = None
