@@ -102,23 +102,6 @@ def snr_estimation(data, noise=None, points=1000, full_output=False):
     return snrlimit
 
 
-def build_dist_matrix(points, inf=False):
-    """
-    Builds a distance matrix from points array.
-    It returns a (n_points, n_points) distance matrix. 
-
-    points: NumPy array with shape (n_points, 2) 
-    """
-    m,n = points.shape
-    D = np.empty((m,m))
-    for i in range(m):
-        for j in range(m):
-            if inf and i==j: 
-                D[i,j] = np.inf
-                continue 
-            D[i,j] = np.linalg.norm(points[i]-points[j], ord=2)
-    return D
-
         
 def load_data(fits_path):
     cube = SpectralCube.read(fits_path)
@@ -218,37 +201,6 @@ def compute_neighbors2(mu_center, mu_eval, maxsig):
     return nn,neigh_indexes
 
 
-@numba.jit('float64 (float64[:,:])', nopython=True)
-def det(X):
-    """
-    Direct computation of determinant for 
-    matrices of size 2x2 and 3x3
-    """
-    n = X.shape[0]
-    if n==2:
-        return X[0,0]*X[1,1] - X[0,1]*X[1,0]
-    else:
-        return X[0,0] * (X[1,1] * X[2,2] - X[2,1] * X[1,2]) - \
-               X[1,0] * (X[0,1] * X[2,2] - X[2,1] * X[0,2]) + \
-               X[2,0] * (X[0,1] * X[1,2] - X[1,1] * X[0,2])
             
 
 
-@numba.jit('float64[:,:] (float64[:,:])', nopython=True)
-def inv(X):
-    """
-    Direct computation of inverse for 
-    matrices of size 2x2 and 3x3
-    """
-    n = X.shape[0]
-    if n==2:
-        ret = np.empty((2,2))
-        ret[0,0] = X[1,1]; ret[0,1] = -X[0,1]
-        ret[1,0] = -X[1,0]; ret[1,1] = X[0,0]
-        return 1./det(X) * ret
-    else:
-        ret = np.empty((3,3))
-        ret[0,0]=X[2,2]*X[1,1]-X[2,1]*X[1,2]; ret[0,1]=-X[2,2]*X[0,1]+X[2,1]*X[0,2]; ret[0,2]=X[1,2]*X[0,1]-X[1,1]*X[0,2]
-        ret[1,0]=-X[2,2]*X[1,0]+X[2,0]*X[1,2]; ret[1,1]=X[2,2]*X[0,0]-X[2,0]*X[0,2]; ret[1,2]=-X[1,2]*X[0,0]+X[1,0]*X[0,2]
-        ret[2,0]=X[2,1]*X[1,0]-X[2,0]*X[1,1]; ret[2,1]=-X[2,1]*X[0,0]+X[2,0]*X[0,1]; ret[2,2]=X[1,1]*X[0,0]-X[1,0]*X[0,1]
-        return 1./det(X) * ret
