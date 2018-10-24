@@ -984,7 +984,7 @@ class HDICE():
         w,sig = self.get_params_mapped()
         if self.ndim==2: mu = np.vstack([self.xc,self.yc]).T
         if self.ndim==3: mu = np.vstack([self.xc,self.yc,self.zc]).T
-        htree = mixture_reduction(w, mu, sig, build_htree=True, adaptive_maxsig=True, verbose=False)
+        htree = mixture_reduction(w, mu, sig, build_htree=True, verbose=False)
         decomp_dict,join_dict,entity_dict = htree
 
         # dictionary to properly map the identifiers of the CE
