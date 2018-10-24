@@ -22,7 +22,7 @@ def _outer(x, y):
         for j in range(n):
             res[i, j] = x[i]*y[j]
     return res
-
+    
 
 @numba.jit('float64 (float64[:,:])', nopython=True, fastmath=True, nogil=True)
 def _det(X):
@@ -312,7 +312,7 @@ def agglomerate():
 
 
 def mixture_reduction(w, mu, cov, n_comp=1, n_neighbors=None, 
-    break_point=1000000, verbose=True, build_htree=False):
+    break_point=1, verbose=True, build_htree=False):
     """
     Gaussian Mixture Reduction Through KL-upper bound approach
     """
@@ -362,6 +362,8 @@ def mixture_reduction(w, mu, cov, n_comp=1, n_neighbors=None,
         # otherwise, compute the BTree and the approximated data structures
         BTree,nn_indexes = _compute_neighbors(mu,n_neighbors)
         diss_matrix = build_diss_matrix(w, mu, cov, nn_indexes)
+        
+    
 
     # main mixture reduction loop
     while cur_mixture_size > tar_mixture_size:
