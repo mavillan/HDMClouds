@@ -180,7 +180,8 @@ def build_diss_matrix(w, mu, cov, nn_indexes):
            nopython=True, fastmath=True, nogil=True, parallel=True)
 def _build_diss_matrix(w, mu, cov):
     M = len(w)
-    diss_matrix = np.inf*np.ones((M,M))
+    diss_matrix = np.empty((M,M), dtype=np.float64)
+    diss_matrix[:] = np.inf
     for i in numba.prange(M):
         for j in range(i+1,M):
             diss_matrix[i,j] = KLdiv(w[i],mu[i],cov[i],w[j],mu[j],cov[j])
@@ -218,7 +219,8 @@ def _least_dissimilar(diss_matrix, indexes):
             if (i==j) or diss_matrix[i,j]==np.inf: continue
             if diss_matrix[i,j]<diss_min:
                 diss_min = diss_matrix[i,j]
-                i_min=i; j_min=j
+                i_min=i
+                j_min=j
     return i_min,j_min
 
 
@@ -238,7 +240,7 @@ def update_merge_mapping(merge_mapping, nindex, dindex):
             merge_mapping[i] = nindex
 
 
-#@numba.jit()
+@numba.jit()
 def radius_search(BTree, mu, n_neighbors, merge_mapping, nindex):
     # performing nn-search through BallTree
     n_samples = BTree.data.shape[0]
@@ -310,7 +312,7 @@ def agglomerate():
 
 
 def mixture_reduction(w, mu, cov, n_comp=1, n_neighbors=None, 
-    verbose=True, build_htree=False):
+    break_point=1000000, verbose=True, build_htree=False):
     """
     Gaussian Mixture Reduction Through KL-upper bound approach
     """
@@ -346,41 +348,50 @@ def mixture_reduction(w, mu, cov, n_comp=1, n_neighbors=None,
         if d==2: n_neighbors=8
         if d==3: n_neighbors=24
 
+    # indexes of "alive" mixture components
     indexes = np.arange(cur_mixture_size, dtype=np.int32)
-    BTree,nn_indexes = _compute_neighbors(mu,n_neighbors)
-
+    
     # idea: keep track that the k-th component was merged into the l-th positon
     merge_mapping = np.arange(cur_mixture_size, dtype=np.int32)
     
-    # computing the initial dissimilarity matrix
-    diss_matrix= build_diss_matrix(w, mu, cov, nn_indexes)
+    if cur_mixture_size<=break_point:
+        # it the size of the starting mixture is less than the
+        # break_point, dont use approximations
+        diss_matrix = _build_diss_matrix(w, mu, cov)
+    else:
+        # otherwise, compute the BTree and the approximated data structures
+        BTree,nn_indexes = _compute_neighbors(mu,n_neighbors)
+        diss_matrix = build_diss_matrix(w, mu, cov, nn_indexes)
 
-    # main loop
+    # main mixture reduction loop
     while cur_mixture_size > tar_mixture_size:
-        # if cur_mixture_size<=break_point:
-        #     # full GMR for improved accuracy
-        #     i_min,j_min = least_dissimilar_full(diss_matrix, indexes)
-        #     w_m, mu_m, cov_m = merge(w[i_min], mu[i_min], cov[i_min], 
-        #                          w[j_min], mu[j_min], cov[j_min])
-        #     # updating structures
-        #     nindex = min(i_min,j_min) # index of the new component
-        #     dindex = max(i_min,j_min) # index of the del component
-        #     w[nindex] = w_m; mu[nindex] = mu_m; cov[nindex] = cov_m
-        #     indexes = np.delete(indexes, get_index(indexes,dindex))
-        #     update_structs_full(diss_matrix, w, mu, cov, indexes, nindex)
-
-        # approximated GMR for improved performance
-        i_min,j_min = least_dissimilar(diss_matrix, indexes, nn_indexes)
-        w_m, mu_m, cov_m = merge(w[i_min], mu[i_min], cov[i_min], 
-                             w[j_min], mu[j_min], cov[j_min])
-        # updating structures
-        nindex = min(i_min,j_min) # index of the new component
-        dindex = max(i_min,j_min) # index of the del component
-        w[nindex] = w_m; mu[nindex] = mu_m; cov[nindex] = cov_m
-        indexes = np.delete(indexes, get_index(indexes,dindex))
-        update_merge_mapping(merge_mapping, nindex, dindex)
-        nn_indexes[nindex] = radius_search(BTree, mu_m, n_neighbors, merge_mapping, nindex)
-        update_structs(nn_indexes, diss_matrix, w, mu, cov, indexes, nindex, dindex)
+        if cur_mixture_size==break_point:
+            # in case the break_point is reached -> recompute the diss_matrix
+            diss_matrix = _build_diss_matrix(w, mu, cov)
+        if cur_mixture_size<=break_point:
+            # full GMR for improved accuracy
+            i_min,j_min = _least_dissimilar(diss_matrix, indexes)
+            w_m,mu_m,cov_m = merge(w[i_min],mu[i_min],cov[i_min], 
+                                     w[j_min],mu[j_min],cov[j_min])
+            # updating structures
+            nindex = min(i_min,j_min) # index of the new component
+            dindex = max(i_min,j_min) # index of the del component
+            w[nindex] = w_m; mu[nindex] = mu_m; cov[nindex] = cov_m
+            indexes = np.delete(indexes, get_index(indexes,dindex))
+            _update_structs(diss_matrix, w, mu, cov, indexes, nindex)   
+        else:
+            # approximated GMR for improved performance
+            i_min,j_min = least_dissimilar(diss_matrix, indexes, nn_indexes)
+            w_m, mu_m, cov_m = merge(w[i_min], mu[i_min], cov[i_min], 
+                                 w[j_min], mu[j_min], cov[j_min])
+            # updating structures
+            nindex = min(i_min,j_min) # index of the new component
+            dindex = max(i_min,j_min) # index of the del component
+            w[nindex] = w_m; mu[nindex] = mu_m; cov[nindex] = cov_m
+            indexes = np.delete(indexes, get_index(indexes,dindex))
+            update_merge_mapping(merge_mapping, nindex, dindex)
+            nn_indexes[nindex] = radius_search(BTree, mu_m, n_neighbors, merge_mapping, nindex)
+            update_structs(nn_indexes, diss_matrix, w, mu, cov, indexes, nindex, dindex)
 
         cur_mixture_size -= 1
         if verbose: print('{2}: Merged components {0} and {1}'.format(i_min, j_min, cur_mixture_size)) 
