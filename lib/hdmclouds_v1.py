@@ -577,6 +577,7 @@ class HDMClouds():
                                     "Centroid Position (RA-Dec)"])
         return stats
 
+    
     def visualize(self):
         def handler(hdmc, split="", join1="", join2="", reset=False, show_stats=False):
             if reset:

@@ -6,7 +6,7 @@ import numpy.ma as ma
 import scipy as sp
 from math import sqrt, exp
 from scipy.interpolate import RegularGridInterpolator
-from sklearn.neighbors import NearestNeighbors
+from sklearn.neighbors import BallTree
 
 from astropy.io import fits
 from astropy.wcs import WCS
@@ -166,18 +166,16 @@ def gradient(img):
 
 
 def compute_neighbors(mu_center, mu_eval, maxsig):
-    nn = NearestNeighbors(radius=maxsig, algorithm="ball_tree", n_jobs=-1)
-    nn.fit(mu_center)
-    neigh_indexes_arr = nn.radius_neighbors(mu_eval, return_distance=False)
-    neigh_indexes = []
-    neigh_indexes_aux = []
-    last = 0
-    for arr in neigh_indexes_arr:
-        l = arr.tolist(); l.sort()
-        last += len(l)
-        for index in l: neigh_indexes.append(index)
-        neigh_indexes_aux.append(last)
-    return np.asarray(neigh_indexes),np.asarray(neigh_indexes_aux)  
+    BTree = BallTree(mu_center)
+    neigh_indexes_arr = BTree.query_radius(mu_eval, 
+                                           r=maxsig, 
+                                           return_distance=False)
+    count_arr = BTree.query_radius(mu_eval,
+                                   r=maxsig,
+                                   count_only=True)
+    neigh_indexes = np.hstack(neigh_indexes_arr)
+    neigh_indexes_aux = np.cumsum(count_arr)
+    return neigh_indexes,neigh_indexes_aux  
 
 
 def compute_neighbors2(mu_center, mu_eval, maxsig):
