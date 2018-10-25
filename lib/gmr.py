@@ -311,8 +311,8 @@ def agglomerate():
     pass
 
 
-def mixture_reduction(w, mu, cov, n_comp=1, n_neighbors=None, 
-    break_point=1, verbose=True, build_htree=False):
+def mixture_reduction(w, mu, cov, n_comp=1, n_neighbors=None,
+                      verbose=True, build_htree=False):
     """
     Gaussian Mixture Reduction Through KL-upper bound approach
     """
@@ -354,47 +354,33 @@ def mixture_reduction(w, mu, cov, n_comp=1, n_neighbors=None,
     # idea: keep track that the k-th component was merged into the l-th positon
     merge_mapping = np.arange(cur_mixture_size, dtype=np.int32)
     
-    if cur_mixture_size<=break_point:
-        # it the size of the starting mixture is less than the
-        # break_point, dont use approximations
-        diss_matrix = _build_diss_matrix(w, mu, cov)
-    else:
-        # otherwise, compute the BTree and the approximated data structures
-        BTree,nn_indexes = _compute_neighbors(mu,n_neighbors)
-        diss_matrix = build_diss_matrix(w, mu, cov, nn_indexes)
-        
-    
+    # BTree for efficient searches
+    BTree,nn_indexes = _compute_neighbors(mu, n_neighbors)
+    diss_matrix = build_diss_matrix(w, mu, cov, nn_indexes)
 
     # main mixture reduction loop
     while cur_mixture_size > tar_mixture_size:
-        if cur_mixture_size==break_point:
-            # in case the break_point is reached -> recompute the diss_matrix
-            diss_matrix = _build_diss_matrix(w, mu, cov)
-        if cur_mixture_size<=break_point:
-            # full GMR for improved accuracy
-            i_min,j_min = _least_dissimilar(diss_matrix, indexes)
-            w_m,mu_m,cov_m = merge(w[i_min],mu[i_min],cov[i_min], 
-                                     w[j_min],mu[j_min],cov[j_min])
-            # updating structures
-            nindex = min(i_min,j_min) # index of the new component
-            dindex = max(i_min,j_min) # index of the del component
-            w[nindex] = w_m; mu[nindex] = mu_m; cov[nindex] = cov_m
-            indexes = np.delete(indexes, get_index(indexes,dindex))
-            _update_structs(diss_matrix, w, mu, cov, indexes, nindex)   
-        else:
-            # approximated GMR for improved performance
-            i_min,j_min = least_dissimilar(diss_matrix, indexes, nn_indexes)
-            w_m, mu_m, cov_m = merge(w[i_min], mu[i_min], cov[i_min], 
+        # approximated GMR for improved performance
+        i_min,j_min = least_dissimilar(diss_matrix, indexes, nn_indexes)
+        if i_min==-1:
+            print(cur_mixture_size)
+            print(diss_matrix[i_min])
+            print(nn_indexes[i_min])
+        w_m, mu_m, cov_m = merge(w[i_min], mu[i_min], cov[i_min], 
                                  w[j_min], mu[j_min], cov[j_min])
-            # updating structures
-            nindex = min(i_min,j_min) # index of the new component
-            dindex = max(i_min,j_min) # index of the del component
-            w[nindex] = w_m; mu[nindex] = mu_m; cov[nindex] = cov_m
-            indexes = np.delete(indexes, get_index(indexes,dindex))
-            update_merge_mapping(merge_mapping, nindex, dindex)
+        # updating structures
+        nindex = min(i_min,j_min) # index of the new component
+        dindex = max(i_min,j_min) # index of the del component
+        w[nindex] = w_m; mu[nindex] = mu_m; cov[nindex] = cov_m
+        indexes = np.delete(indexes, get_index(indexes,dindex))
+        update_merge_mapping(merge_mapping, nindex, dindex)
+        if cur_mixture_size <= n_neighbors+1:
+            alive_neighbors = np.delete(indexes, get_index(indexes,nindex))
+            nn_indexes[nindex,:] = MAXINT
+            nn_indexes[nindex,0:len(alive_neighbors)] = alive_neighbors 
+        else:
             nn_indexes[nindex] = radius_search(BTree, mu_m, n_neighbors, merge_mapping, nindex)
-            update_structs(nn_indexes, diss_matrix, w, mu, cov, indexes, nindex, dindex)
-
+        update_structs(nn_indexes, diss_matrix, w, mu, cov, indexes, nindex, dindex)
         cur_mixture_size -= 1
         if verbose: print('{2}: Merged components {0} and {1}'.format(i_min, j_min, cur_mixture_size)) 
 
