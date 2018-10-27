@@ -597,7 +597,8 @@ class HDMClouds():
                     hdmc.join_ce((join1,join2))
                 elif (join2,join1) in hdmc.joinable:
                     hdmc.join_ce((join2,join1))
-            gp.ce_plot(hdmc, wcs=hdmc.wcs)
+            if hdmc.ndim==2: gp.ce_plot(hdmc, wcs=hdmc.wcs)
+            if hdmc.ndim==3: gp.ce_plot_3d(hdmc, wcs=hdmc.wcs)
 
             if show_stats:
                 stats = self.compute_stats()
