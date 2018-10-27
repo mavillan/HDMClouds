@@ -377,7 +377,7 @@ def ce_plot(hdmc, show_title=False, cmap1=plt.cm.gray_r,
     fig = plt.figure(figsize=(12,9))
     if wcs is not None: fig.gca(projection=wcs)
     interval = AsymmetricPercentileInterval(0.25, 99.75, n_samples=100000)
-    vmin, vmax = interval.get_limits(hdmc.orig_data)
+    vmin,vmax = interval.get_limits(hdmc.orig_data)
     vmin = -0.1*(vmax-vmin) + vmin
     vmax = 0.1*(vmax-vmin) + vmax
     ax = plt.gca()
@@ -427,6 +427,180 @@ def ce_plot(hdmc, show_title=False, cmap1=plt.cm.gray_r,
     cbar = plt.colorbar(im, ax=ax, pad=0.01, aspect=30)
     if unit is not None: cbar.set_label("[{0}]".format(unit))
     ax.set_aspect('auto')
+    plt.show()
+
+    
+
+def ce_plot_3d(hdmc, show_title=False, cmap1=plt.cm.gray_r, 
+                 cmap2=plt.cm.gist_rainbow, save_path=None, 
+                 wcs=None, unit=None, manual_label=False):
+    # generating the color for the cloud entities    
+    num_ce = len(hdmc.splittable)
+    color = cmap2(np.linspace(0., 1., num_ce))
+    if show_title: plt.title('{0} cloud entities decomposition'.format(num_ce))
+    levels = [0.025] # JARCOR VALUE
+    
+    for axis in range(3):
+        if axis==0:   fig = plt.figure(figsize=(8,8))
+        elif axis==1: fig = plt.figure(figsize=(8,4))
+        elif axis==2: fig = plt.figure(figsize=(4,8))
+
+        if wcs is not None:
+            if axis==0:
+                ax = plt.subplot(111, projection=wcs, slices=("x", "y", 0))
+                ax.set_xlabel("RA (J2000)")
+                ax.set_ylabel("Dec (J2000)")
+            elif axis==1:
+                ax = plt.subplot(111, projection=wcs, slices=("x",0,"y"))
+                ax.set_xlabel("RA (J2000)")
+                ax.set_ylabel("FREQ [GHz]")
+            elif axis==2:
+                ax = plt.subplot(111, projection=wcs, slices=(0,"y","x"))
+                ax.set_xlabel("FREQ [GHz]")
+                ax.set_ylabel("Dec (J2000)")
+                ax.locator_params(axis="x", nbins=2)
+                ax.yaxis.tick_right()
+                ax.yaxis.set_label_position("right")
+            ax.coords[2].set_major_formatter('x.x')
+            ax.coords[2].set_format_unit(units.GHz)
+        else: ax = plt.subplot(111)
+
+        # stacked data, mapping to [0,1] and display
+        _data = hdmc.data.sum(axis=axis)
+        if axis==2: _data = data.T
+        dmin = _data.min(); dmax = _data.max()
+        _data -= dmin; _data /= dmax
+        ax.imshow(_data, cmap=cmap)
+        if axis==0: ax.invert_yaxis()
+        ax.xaxis.set_tick_params(labelsize=24)
+
+        for i,CEid in enumerate(hdmc.splittable):
+            ice_key,idx = CEid.split("-")
+            hdice = hdmc.hdice_dict[ice_key]
+
+            indexes = hdice.entity_dict[int(idx)]
+            params = hdice.get_params_filtered(indexes)
+            u = hdice.get_approximation_global(params)
+            u = u.reshape(hdmc.shape)
+            _u = u.sum(axis=axis)
+            if axis==2: _u = _u.T
+            _u -= dmin; _u /= dmax
+            cs = ax.contour(_u, levels=levels, colors=[color[i]], linewidths=4)
+            ax.clabel(cs, cs.levels, inline=True, fmt=CEid, fontsize=13)
+       
+    if save_path is not None:
+        plt.savefig(save_path, format='eps', dpi=150, bbox_inches='tight')
+    
+    cbar = plt.colorbar(im, ax=ax, pad=0.01, aspect=30)
+    if unit is not None: cbar.set_label("[{0}]".format(unit))
+    ax.set_aspect('auto')
+    plt.show()
+
+    
+    
+    
+def components_plot3D(elm, components_list, n_levels=1, save_path=None,
+                      cmap=plt.cm.gray_r, wcs=None, unit=None, spec=None):
+    # get all the (mapped) parameters
+    xc, yc, zc, c, sig = elm.get_params_mapped()
+
+    # generating the evaluation points
+    _xe = np.linspace(0., 1., elm.dims[0]+2)[1:-1]
+    _ye = np.linspace(0., 1., elm.dims[1]+2)[1:-1]
+    _ze = np.linspace(0., 1., elm.dims[2]+2)[1:-1]
+    len_xe = len(_xe); len_ye = len(_ye); len_ze = len(_ze)
+    Xe,Ye,Ze = np.meshgrid(_xe, _ye, _ze, sparse=False, indexing='ij')
+    xe = Xe.ravel(); ye = Ye.ravel(); ze = Ze.ravel()
+
+    n_comp = len(components_list)
+    color = plt.cm.rainbow(np.linspace(0., 1., n_comp))
+
+    for axis in range(3):
+        if axis==0: fig = plt.figure(figsize=(8,8))
+        elif axis==1: fig = plt.figure(figsize=(8,4))
+        elif axis==2: fig = plt.figure(figsize=(4,8))
+
+        if wcs is not None:
+            if axis==0:
+                ax = plt.subplot(111, projection=wcs, slices=("x", "y", 0))
+                ax.set_xlabel("RA (J2000)")
+                ax.set_ylabel("Dec (J2000)")
+            elif axis==1:
+                ax = plt.subplot(111, projection=wcs, slices=("x",0,"y"))
+                ax.set_xlabel("RA (J2000)")
+                ax.set_ylabel("FREQ [GHz]")
+            elif axis==2:
+                ax = plt.subplot(111, projection=wcs, slices=(0,"y","x"))
+                ax.set_xlabel("FREQ [GHz]")
+                ax.set_ylabel("Dec (J2000)")
+                ax.locator_params(axis="x", nbins=2)
+                ax.yaxis.tick_right()
+                ax.yaxis.set_label_position("right")
+            ax.coords[2].set_major_formatter('x.x')
+            ax.coords[2].set_format_unit(units.GHz)
+        else: ax = plt.subplot(111)
+
+
+        # stacked data, mapping to [0,1] and display
+        _data = elm.data.sum(axis=axis)
+        if axis==2: _data = _data.T
+        dmin = _data.min(); dmax = _data.max()
+        _data -= dmin; _data /= dmax
+        ax.imshow(_data, cmap=cmap)
+        if axis==0: ax.invert_yaxis()
+        ax.xaxis.set_tick_params(labelsize=24)
+
+        # contours configuration
+        minval = ((elm.base_level*elm.dims[axis]) - dmin) / dmax
+        levels = np.linspace(minval+0.01, 0.95, n_levels)
+
+        for i,indexes in enumerate(components_list):
+            _xc = xc[indexes]
+            _yc = yc[indexes]
+            _zc = zc[indexes]
+            _c = c[indexes]
+            _sig = sig[indexes]
+            u = u_eval3D(_c, _sig, _xc, _yc, _zc, xe, ye, ze, support=elm.support) + elm.base_level
+            _u = u.reshape(len_xe, len_ye, len_ze).sum(axis=axis)
+            if axis==2: _u = _u.T
+            _u -= dmin; _u /= dmax
+            cs = ax.contour(_u, levels=levels, colors=[color[i]], linewidths=4)
+            ax.clabel(cs, cs.levels, inline=True, fmt="S{0}".format(i+1), 
+                      fontsize=13)
+        if save_path is not None:
+            plt.savefig(save_path+"_{0}C_A{1}.eps".format(n_comp, axis), format='eps', dpi=150, bbox_inches='tight')
+        plt.tick_params(axis='both', which='major', labelsize=17)
+        plt.show()
+
+    total_flux = elm.data.sum()
+    plt.figure(figsize=(8,8))
+    for i,indexes in enumerate(components_list):
+        _xc = xc[indexes]
+        _yc = yc[indexes]
+        _zc = zc[indexes]
+        _c = c[indexes]
+        _sig = sig[indexes]
+        u = u_eval3D(_c, _sig, _xc, _yc, _zc, xe, ye, ze, support=elm.support) + elm.base_level
+        u = u.reshape(len_xe, len_ye, len_ze)
+        #base = np.sum(u>0.)*elm.base_level
+        #_u -= dmin; _u /= dmax
+        f = u.sum(axis=(1,2))
+        f /= total_flux
+        if spec is not None:
+            plt.plot(spec, f, '--', lw=4, color=color[i], ms=6)
+            plt.text(spec[np.argmax(f)], np.max(f), "S{0}".format(i+1), color=color[i], fontsize=16)
+            ax = plt.gca()
+            ax.locator_params(nbins=5, axis='x')
+        else:
+            plt.plot(f, '--', lw=4, color=color[i], ms=6)
+    #plt.xlabel("FREQ [GHz]", fontsize=13)
+    plt.xlabel("FREQ [GHz]")
+    #plt.ylabel("Standardised flux", fontsize=13)
+    plt.ylabel("Standardised flux")
+    #plt.tick_params(axis='both', which='major', labelsize=17)
+    plt.grid()   
+    if save_path is not None:
+        plt.savefig(save_path+"_{0}C_freq.eps".format(n_comp), format='eps', dpi=150, bbox_inches='tight')
     plt.show()
 
 
@@ -492,7 +666,6 @@ def eccentricity_plot(data, xc, yc, sig, wcs=None):
     plt.show()  
 
 
-
 ########################################################
 # 3D only functions
 ########################################################
@@ -510,10 +683,11 @@ def cube_plot(data, wcs=None, cmap=plt.cm.cubehelix, unit=None, freq=None):
     im = ax.imshow(data.sum(axis=0), cmap=cmap)
     cbar = plt.colorbar(im, ax=ax, pad=0.01, aspect=30)
     if unit is not None: cbar.set_label("[{0}]".format(unit))
+    ax.invert_yaxis()
     ax.set_aspect('auto')
 
     if wcs is not None:
-        ax = plt.subplot(222, projection=wcs, slices=("x",0,"y"))
+        ax = plt.subplot(223, projection=wcs, slices=("x",0,"y"))
         ax.coords[2].set_major_formatter('x.x')
         ax.coords[2].set_format_unit(units.GHz)
         ax.set_xlabel(umap[wcs.axis_type_names[0]])
@@ -525,13 +699,13 @@ def cube_plot(data, wcs=None, cmap=plt.cm.cubehelix, unit=None, freq=None):
     ax.set_aspect('auto')
 
     if wcs is not None:
-        ax = plt.subplot(223, projection=wcs, slices=(0,"x","y"))
+        ax = plt.subplot(222, projection=wcs, slices=(0,"y","x"))
         ax.coords[2].set_major_formatter('x.x')
         ax.coords[2].set_format_unit(units.GHz)
-        ax.set_xlabel(umap[wcs.axis_type_names[1]])
-        ax.set_ylabel(umap[wcs.axis_type_names[2]])
+        ax.set_ylabel(umap[wcs.axis_type_names[1]])
+        ax.set_xlabel(umap[wcs.axis_type_names[2]])
     else: plt.subplot(313)
-    im = ax.imshow(data.sum(axis=2), cmap=cmap)
+    im = ax.imshow(data.sum(axis=2).T, cmap=cmap)
     cbar = plt.colorbar(im, ax=ax, pad=0.01, aspect=30)
     if unit is not None: cbar.set_label("[{0}]".format(unit))
     ax.set_aspect('auto')
@@ -540,13 +714,15 @@ def cube_plot(data, wcs=None, cmap=plt.cm.cubehelix, unit=None, freq=None):
         ax = plt.subplot(224)
         flux = data.sum(axis=(1,2))/data.sum()
         ax.plot(freq, flux, 'o--', lw=1, color="red", ms=6)
-        ax.xaxis.set_major_formatter(FormatStrFormatter('%.2f'))
+        ax.xaxis.set_major_formatter(FormatStrFormatter('%.3f'))
         ax.set_xlabel("FREQ [GHz]")
         ax.set_ylabel("Standardised flux")
+        ax.locator_params(nbins=5, axis='x')
         ax.grid()
         ax.set_aspect('auto')
     plt.show()
 
+    
 def points_plot3d(points, title=None, color="red"):
     x = points[:,0]
     y = points[:,1]
@@ -637,120 +813,92 @@ def comparative_slices_plot(data1, data2, slc):
     plt.show()
 
 
-def structs_plot3D(hdmc, structs_list, n_levels=1, save_path=None):
-    # get all the (mapped) parameters
-    xc, yc, zc, c, sig = hdmc.get_params_mapped()
-
-    # generating the evaluation points
-    # FIX POINTS POSITIONS IN THE NEAR FUTURE
-    _xe = np.linspace(0., 1., hdmc.shape[0]+2)[1:-1]
-    _ye = np.linspace(0., 1., hdmc.shape[1]+2)[1:-1]
-    _ze = np.linspace(0., 1., hdmc.shape[2]+2)[1:-1]
-    len_xe = len(_xe); len_ye = len(_ye); len_ze = len(_ze)
-    Xe,Ye,Ze = np.meshgrid(_xe, _ye, _ze, sparse=False, indexing='ij')
-    xe = Xe.ravel(); ye = Ye.ravel(); ze = Ze.ravel()
-
-    n_comp = len(structs_list)
-    color = plt.cm.rainbow(np.linspace(0., 1., n_comp))
+def ce_plot_3d(hdmc, show_title=False, cmap1=plt.cm.cubehelix, 
+                 cmap2=plt.cm.gist_rainbow, save_path=None,
+                 wcs=None, unit=None, manual_label=False):
+    # generating the color for the cloud entities
+    fig = plt.figure(figsize=(15,10))
+    vmin = hdmc.vmin
+    vmax = hdmc.vmax
+    num_ce = len(hdmc.splittable)
+    color = cmap2(np.linspace(0., 1., num_ce))
+    if show_title: plt.title('{0} cloud entities decomposition'.format(num_ce))
 
     for axis in range(3):
-        if axis==0: plt.figure(figsize=(8,8))
-        elif axis==1: plt.figure(figsize=(8,4))
-        elif axis==2: plt.figure(figsize=(4,8))
-        ax = plt.subplot(1,1,1)
+        if wcs is not None:
+            if axis==0:
+                ax = plt.subplot(221, projection=wcs, slices=("x", "y", 0))
+                ax.set_xlabel("RA (J2000)")
+                ax.set_ylabel("Dec (J2000)")
+            elif axis==1:
+                ax = plt.subplot(223, projection=wcs, slices=("x",0,"y"))
+                ax.set_xlabel("RA (J2000)")
+                ax.set_ylabel("FREQ [GHz]")
+            elif axis==2:
+                ax = plt.subplot(222, projection=wcs, slices=(0,"y","x"))
+                ax.set_xlabel("FREQ [GHz]")
+                ax.set_ylabel("Dec (J2000)")
+                ax.locator_params(axis="x", nbins=2)
+                ax.yaxis.tick_right()
+                ax.yaxis.set_label_position("right")
+            ax.coords[2].set_major_formatter('x.x')
+            ax.coords[2].set_format_unit(units.GHz)
+        else: ax = plt.subplot(311)
 
         # stacked data, mapping to [0,1] and display
-        _data = hdmc.data.sum(axis=axis)
+        _data = hdmc.orig_data.sum(axis=axis)
         if axis==2: _data = _data.T
-        dmin = _data.min(); dmax = _data.max()
-        _data -= dmin; _data /= dmax
-        ax.imshow(_data, cmap=plt.cm.cubehelix, aspect='auto')
-        if axis==0:       
-            ax.set_xlabel("RA"); ax.set_ylabel("DEC")  
-        elif axis==1:
-            ax.set_xlabel("RA"); ax.set_ylabel("FREQ")
-        elif axis==2:
-            ax.set_xlabel("FREQ"); ax.set_ylabel("DEC")
-            ax.yaxis.set_label_position("right")
-            ax.yaxis.tick_right()
-        ax.tick_params(axis='both', which='major')
-        ax.grid()
+        im = ax.imshow(_data, cmap=cmap1)
+        cbar = plt.colorbar(im, ax=ax, pad=0.01, aspect=30)
+        if axis==0: ax.invert_yaxis()
 
-        # contours configuration
-        minval = ((hdmc.back_level*hdmc.shape[axis]) - dmin) / dmax
-        levels = np.linspace(minval+0.01, 0.95, n_levels)
+        for i,CEid in enumerate(hdmc.splittable):
+            ice_key,idx = CEid.split("-")
+            hdice = hdmc.hdice_dict[ice_key]
 
-        for i,indexes in enumerate(structs_list):
-            _xc = xc[indexes]
-            _yc = yc[indexes]
-            _zc = zc[indexes]
-            _c = c[indexes]
-            _sig = sig[indexes]
-            u = u_eval3D(_c, _sig, _xc, _yc, _zc, xe, ye, ze, support=hdmc.support)
-            _u = u.reshape(len_xe, len_ye, len_ze).sum(axis=axis)
-            if axis==2: _u = _u.T
-            _u -= dmin; _u /= dmax
-            ax.contour(_u, levels=levels, colors=[color[i]], linewidths=4)
-        if save_path is not None:
-            plt.savefig(save_path+"_{0}C_A{1}.eps".format(n_comp, axis), format='eps', dpi=150, bbox_inches='tight')
-        plt.show()
+            indexes = hdice.entity_dict[int(idx)]
+            params = hdice.get_params_filtered(indexes)
+            u = hdice.get_approximation_global(params)
+            u *= (vmax-vmin); u += vmin; u += hdmc.back_level
+            u = u.reshape(hdmc.shape)
+            _u = u.sum(axis=axis)
+            if axis==2: _u = _u.T  
+                
+            levels = [0.2*hdmc.back_level]
+            cs = ax.contour(_u, levels=levels, colors=[color[i]], linewidths=4)
+            ax.clabel(cs, cs.levels, inline=True, fmt=CEid, fontsize=13)
+        ax.set_aspect('auto')
+    
+    ax = plt.subplot(224)
+    total_flux = hdmc.orig_data.sum()
+    for i,CEid in enumerate(hdmc.splittable):
+        ice_key,idx = CEid.split("-")
+        hdice = hdmc.hdice_dict[ice_key]
 
-    total_flux = hdmc.data.sum()
-    plt.figure(figsize=(8,8))
-    for i,indexes in enumerate(structs_list):
-        _xc = xc[indexes]
-        _yc = yc[indexes]
-        _zc = zc[indexes]
-        _c = c[indexes]
-        _sig = sig[indexes]
-        u = u_eval3D(_c, _sig, _xc, _yc, _zc, xe, ye, ze, support=hdmc.support)
-        u = u.reshape(len_xe, len_ye, len_ze)
-        #base = np.sum(u>0.)*hdmc.back_level
-        #_u -= dmin; _u /= dmax
+        indexes = hdice.entity_dict[int(idx)]
+        params = hdice.get_params_filtered(indexes)
+        u = hdice.get_approximation_global(params)
+        u *= (vmax-vmin); u += vmin; u += hdmc.back_level
+        u = u.reshape(hdmc.shape)
         f = u.sum(axis=(1,2))
         f /= total_flux
-        plt.plot(f, '--', lw=4, color=color[i], ms=6)
-    plt.xlabel("FREQ")
-    plt.ylabel("Standardized flux")
-    plt.tick_params(axis='both', which='major')
-    plt.grid()   
+            
+        if hdmc.freq is not None:
+            ax.plot(hdmc.freq, f, '--', lw=4, color=color[i], ms=6)
+            ax.text(hdmc.freq[np.argmax(f)], np.max(f), CEid, color=color[i], fontsize=16)
+            ax.locator_params(nbins=5, axis='x')
+        else:
+            ax.plot(f, '--', lw=4, color=color[i], ms=6)
+    ax.set_xlabel("FREQ [GHz]")
+    ax.set_ylabel("Standardised flux")
+    ax.grid() 
+    ax.set_aspect('auto')
+       
     if save_path is not None:
-        plt.savefig(save_path+"_{0}C_freq.eps".format(n_comp), format='eps', dpi=150, bbox_inches='tight')
+        plt.savefig(save_path, format='eps', dpi=150, bbox_inches='tight')
     plt.show()
-
-
-def structs_plot3D_(hdmc, structs_dict, n_comp):
-    # get all the (mapped) parameters
-    xc, yc, zc, c, sig = hdmc.get_params_mapped()
-
-    # generating the evaluation points
-    _xe = np.linspace(0., 1., hdmc.shape[0]+2)[1:-1]
-    _ye = np.linspace(0., 1., hdmc.shape[1]+2)[1:-1]
-    _ze = np.linspace(0., 1., hdmc.shape[2]+2)[1:-1]
-    len_xe = len(_xe); len_ye = len(_ye); len_ze = len(_ze)
-    Xe,Ye,Ze = np.meshgrid(_xe, _ye, _ze, sparse=False, indexing='ij')
-    xe = Xe.ravel(); ye = Ye.ravel(); ze = Ze.ravel()  
-
-    clump_map = np.empty(hdmc.shape)
-
-    # stacked data, mapping to [0,1] and display 
-    back_level = hdmc.back_level
-
-    # contours configuration
-    color_index = 20.
-
-    for i,indexes in enumerate(structs_dict[n_comp]):
-        _xc = xc[indexes]
-        _yc = yc[indexes]
-        _zc = zc[indexes]
-        _c = c[indexes]
-        _sig = sig[indexes]
-        u = u_eval3D(_c, _sig, _xc, _yc, _zc, xe, ye, ze, support=hdmc.support)
-        _u = u.reshape(len_xe, len_ye, len_ze)
-        clump_map[_u > hdmc.back_level+0.01] = color_index
-        color_index += 20.
-    return clump_map
-
+    
+    
 
 def _stat_plot(x_var, r_stats, stat, x_label='', loglog=False, n=5, slope=None, name=None):
     """
