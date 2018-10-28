@@ -289,18 +289,35 @@ class HDMClouds():
         self.elapsed_time = None
         self.residual_stats = None
 
-    def coord2world(self, xcoord, ycoord):
+    def coord2world(self, xcoord, ycoord, zcoord=None):
         # we first transform from our internal coordinate
         # to a pixel position
         px = (xcoord-self.pix_lenght/2.)/self.pix_lenght
         py = (ycoord-self.pix_lenght/2.)/self.pix_lenght
-        angx,angy = self.wcs.wcs_pix2world(px,py,0)
+        if self.ndim==3: pz = (zcoord-self.pix_lenght/2.)/self.pix_lenght
+            
+        if self.ndim==2: 
+            positions = np.vstack([px,py]).T
+            converted = self.wcs.wcs_pix2world(positions,0)
+            angx = converted[:,0]
+            angy = converted[:,1]
+        if self.ndim==3: 
+            positions = np.vstack([px,py,pz]).T
+            converted = self.wcs.wcs_pix2world(positions,0)
+            angx = converted[:,0]
+            angy = converted[:,1]
+            freq = converted[:,2]
+            # from Hz to Ghz 
+            freq = ["{:.5f} GHz".format(f/10**9) for f in freq] 
+        
         # convinient transformations
         angx = Angle(angx, units.degree)
         angy = Angle(angy, units.degree)
         angx = angx.to_string(unit=units.degree, sep=('deg', 'm', 's'))
         angy = angy.to_string(unit=units.degree, sep=('deg', 'm', 's'))
-        return angx,angy
+        
+        if self.ndim==2: return angx,angy
+        if self.ndim==3: return angx,angy,freq
 
     def set_params(self,w,sig):
         """
@@ -560,28 +577,39 @@ class HDMClouds():
             y_centroid = np.sum(u*ye)/np.sum(u)
             if self.ndim==3: z_centroid = np.sum(u*ze)/np.sum(u)
 
-            if self.ndim==2: ra_centroid,dec_centroid = self.coord2world(y_centroid,x_centroid)
+            if self.ndim==2: 
+                out = self.coord2world(y_centroid,x_centroid)
+                ra_centroid,dec_centroid = out
+            if self.ndim==3: 
+                out = self.coord2world(y_centroid,x_centroid,z_centroid)
+                ra_centroid,dec_centroid,f_centroid = out
 
             # we apply to u the inverse mapping
             total_flux = np.sum((self.vmax-self.vmin)*u + self.vmin)
 
-            # FALTA AGREGAR WZ_CENTROID!
-            if self.ndim==2: stats[CEid] = (total_flux, (y_centroid, x_centroid), (ra_centroid, dec_centroid))
-            if self.ndim==3: stats[CEid] = (total_flux, (x_centroid, y_centroid, z_centroid))
+            if self.ndim==2: stats[CEid] = (total_flux,
+                                            ra_centroid[0], 
+                                            dec_centroid[0])
+            if self.ndim==3: stats[CEid] = (total_flux, 
+                                            ra_centroid[0], 
+                                            dec_centroid[0], 
+                                            f_centroid[0])
 
         if self.ndim==2:
             stats = pd.DataFrame.from_dict(
                     stats,
                     orient="index",
                     columns=["Flux [Jy/Beam]",
-                             "Centroid Position (X-Y)",
-                             "Centroid Position (RA-Dec)"])
+                             "Right Ascension",
+                             "Declination"])
         if self.ndim==3:
             stats = pd.DataFrame.from_dict(
                     stats,
                     orient="index",
                     columns=["Flux [Jy/Beam]",
-                             "Centroid Position (X-Y)"])
+                             "Right Ascension",
+                             "Declination",
+                             "Frequency"])
         return stats
 
     
