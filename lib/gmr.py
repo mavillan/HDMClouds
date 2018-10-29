@@ -594,3 +594,100 @@ def agglomerate(w, mu, cov, n_comp=1, n_neighbors=None,
         new_entity += 1
 
     return decomp_dict,join_dict,entity_dict
+
+
+@numba.jit('Tuple((int32,int32)) (float64[:,:], int32[:])', 
+           nopython=True, fastmath=True)
+def least_dissimilar_isd(diss_matrix, indexes):
+    # number of mixture components still alive
+    i_min = -1; j_min = -1
+    diss_min = np.inf
+    for i in indexes:
+        for j in indexes:
+            if (i==j) or diss_matrix[i,j]==np.inf: continue
+            if diss_matrix[i,j]<diss_min:
+                diss_min = diss_matrix[i,j]
+                i_min=i
+                j_min=j
+    return i_min,j_min
+
+
+@numba.jit()
+def update_diss_matrix(w, mu, cov, diss_matrix, indexes, nindex, entity_key_mapping, entity_dict):
+    _nindex = entity_key_mapping[nindex]
+    for j in indexes:
+        if j==nindex:
+            diss_matrix[nindex,j] = np.inf
+            continue
+        _j = entity_key_mapping[j]
+        ind1 = entity_dict[_nindex]
+        ind2 = entity_dict[_j]
+        diss_matrix[nindex,j] = compute_isd(w[ind1],mu[ind1,:],cov[ind1],w[ind2],mu[ind2,:],cov[ind2])
+    
+def agglomerate_isd(w, mu, cov, n_comp=1, verbose=True):
+    """
+    Gaussian Mixture Reduction Through ISD approach
+    """
+    # current mixture size
+    cur_mixture_size = len(w)
+    # target mixture size
+    tar_mixture_size = n_comp
+    # dimensionality of data
+    d = mu.shape[1]
+
+    # needed conversions
+    w = np.copy(w)
+    mu = np.copy(mu)
+    cov = np.copy(cov)
+    #if cov.ndim==1:
+        # if cov is 1-dimensional we convert it to its covariance matrix form
+        #cov = np.asarray( [(sig**2)*np.identity(d) for sig in cov] )
+
+    # hierarchical tracking data structures
+    decomp_dict = dict()
+    join_dict = dict()
+    entity_dict = {i:[i] for i in range(cur_mixture_size)}
+    # the below dict maps the indexes of the current GM components,
+    # to the indexes of the current cloud entities
+    entity_key_mapping = {i:i for i in range(cur_mixture_size)}
+    # label for the next entity to be added
+    new_entity = cur_mixture_size 
+
+    # indexes of "alive" mixture components
+    indexes = np.arange(cur_mixture_size, dtype=np.int32)
+    
+    # distance matrix between the identified mixtures
+    diss_matrix = np.empty((cur_mixture_size,cur_mixture_size), dtype=np.float64)
+    diss_matrix[:,:] = np.inf  
+    for i in range(cur_mixture_size):
+        for j in range(i+1,cur_mixture_size):
+            diss_matrix[i,j] = compute_isd(w[[i]], mu[[i],:], cov[[i]], w[[j]], mu[[j],:], cov[[j]])
+
+    # main mixture reduction loop
+    while cur_mixture_size > tar_mixture_size:
+        # approximated GMR for improved performance
+        i_min,j_min = least_dissimilar_isd(diss_matrix, indexes)
+
+        # updating structures
+        nindex = min(i_min,j_min) # index of the new component
+        dindex = max(i_min,j_min) # index of the del component
+        indexes = np.delete(indexes, get_index(indexes,dindex))
+        cur_mixture_size -= 1
+        
+        if verbose: print('{2}: Merged components {0} and {1}'.format(i_min, j_min, cur_mixture_size)) 
+
+        # updating the hierarchical tracking structures
+        i_min = entity_key_mapping[i_min]
+        j_min = entity_key_mapping[j_min] 
+        decomp_dict[new_entity] = (i_min,j_min)
+        join_dict[(i_min,j_min)] = new_entity
+        entity_dict[new_entity] = entity_dict[i_min]+entity_dict[j_min]
+        entity_key_mapping[nindex] = new_entity
+        del entity_key_mapping[dindex]
+        new_entity += 1
+
+        update_diss_matrix(w, mu, cov, diss_matrix, indexes, nindex, entity_key_mapping, entity_dict)
+        
+    return decomp_dict,join_dict,entity_dict
+
+
