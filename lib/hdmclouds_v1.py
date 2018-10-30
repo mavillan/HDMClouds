@@ -467,10 +467,10 @@ class HDMClouds():
         # storing the total elapsed time    
         self.elapsed_time = time.time() - t0
 
-    def build_hierarchical_tree(self):
+    def build_hierarchical_tree(self, htree_algo="KL"):
         for i,hdice in enumerate(self.hdice_list):
             print("Building the hierarchical tree for Isolated Cloud Entity {0}".format(self.hdice_keys[i]))
-            hdice.build_htree()
+            hdice.build_htree(htree_algo=htree_algo)
             print("DONE\n")
 
         # global list of splittable and joinable cloud entities
