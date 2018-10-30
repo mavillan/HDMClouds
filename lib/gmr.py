@@ -156,38 +156,7 @@ def compute_nisd(w1, mu1, sig1, w2, mu2, sig2):
             Jlr += w1[i]*w2[j]*np.exp(-0.5*quad/cov_term)/(2*np.pi*cov_term)
     return (Jll+Jrr-2*Jlr)/(Jll+Jrr)
     
-
-#@numba.jit('float64 (float64, float64[:], float64[:,:], float64, float64[:], float64[:,:])', nopython=True, nogil=True)
-#def isd_diss(w1, mu1, cov1, w2, mu2, cov2):
-#    """
-#    Computes the ISD (Integral Square Difference between components [(w1,mu1,cov1), (w2,mu2,cov2)])
-#    and its moment preserving merge. Ref: Cost-Function-Based Gaussian Mixture Reduction for Target Tracking
-#    """
-#    w_m, mu_m, cov_m = merge(w1, mu1, cov1, w2, mu2, cov2)
-#    Jhr = w1*w_m * normal(mu1, mu_m, cov1+cov_m) + w2*w_m * normal(mu2, mu_m, cov2+cov_m)
-#    Jrr = w_m**2 * (1./np.sqrt((2*np.pi)**2 * np.linalg.det(2*cov_m)))
-#    Jhh = (w1**2)*(1./np.sqrt((2*np.pi)**2 * np.linalg.det(2*cov1))) + \
-#          (w2**2)*(1./np.sqrt((2*np.pi)**2 * np.linalg.det(2*cov2))) + \
-#          2*w1*w2*normal(mu1, mu2, cov1+cov2)
-#    return Jhh - 2*Jhr + Jrr
-
-# @numba.jit('float64 (float64[:], float64[:,:], float64[:,:,:])', nopython=True, nogil=True)
-# def isd_diss_full(w, mu, sig):
-#     # number of components
-#     c = len(w)
-#     # merged moment preserving gaussian
-#     w_m, mu_m, sig_m = merge_full(w, mu, sig)
-#     # ISD computation between merge and components
-#     Jhr = 0.
-#     Jrr = w_m**2 * (1./np.sqrt((2*np.pi)**2 * np.linalg.det(2*sig_m)))
-#     Jhh = 0.
-#     for i in range(c):  
-#         Jhr += w[i]*w_m * normal(mu[i], mu_m, sig[i]+sig_m)   
-#     for i in range(c):
-#         for j in range(c):
-#             Jhh += w[i]*w[j] * normal(mu[i], mu[j], sig[i]+sig[j])
-#     return Jhh - 2*Jhr + Jrr
-
+    
 
 @numba.jit('(float64[:,:], int32)')
 def _compute_neighbors(mu_center, n_neighbors):
@@ -355,99 +324,7 @@ def _update_structs(diss_matrix, w, mu, cov, indexes, nindex):
 
 
 
-def mixture_reduction(w, mu, cov, n_comp=1, n_neighbors=None,
-                      verbose=True, build_htree=False):
-    """
-    Gaussian Mixture Reduction Through KL-upper bound approach
-    """
-    # current mixture size
-    cur_mixture_size = len(w)
-    # target mixture size
-    tar_mixture_size = n_comp
-    # dimensionality of data
-    d = mu.shape[1]
-
-    # needed conversions
-    w = np.copy(w)
-    mu = np.copy(mu)
-    cov = np.copy(cov)
-    if cov.ndim==1:
-        # if cov is 1-dimensional we convert it to its covariance matrix form
-        cov = np.asarray( [(sig**2)*np.identity(d) for sig in cov] )
-
-    if build_htree:
-        # hierarchical tracking data structures
-        decomp_dict = dict()
-        join_dict = dict()
-        entity_dict = {i:[i] for i in range(cur_mixture_size)}
-        # the below dict maps the indexes of the current GM components,
-        # to the indexes of the current cloud entities
-        entity_key_mapping = {i:i for i in range(cur_mixture_size)}
-        # label for the next entity to be added
-        new_entity = cur_mixture_size 
-
-    # we consider neighbors at a radius equivalent to the lenght of k_sigma*sigma_max
-    if n_neighbors is None:
-        # one neighbor for each considered degree of freedom
-        if d==2: n_neighbors=8
-        if d==3: n_neighbors=26
-
-    # indexes of "alive" mixture components
-    indexes = np.arange(cur_mixture_size, dtype=np.int32)
-    
-    # idea: keep track that the k-th component was merged into the l-th positon
-    merge_mapping = np.arange(cur_mixture_size, dtype=np.int32)
-    
-    # BTree for efficient searches
-    BTree,nn_indexes = _compute_neighbors(mu, n_neighbors)
-    diss_matrix = build_diss_matrix(w, mu, cov, nn_indexes)
-
-    # main mixture reduction loop
-    while cur_mixture_size > tar_mixture_size:
-        # approximated GMR for improved performance
-        i_min,j_min = least_dissimilar(diss_matrix, indexes, nn_indexes)
-        if i_min==-1:
-            print(cur_mixture_size)
-            print(diss_matrix[i_min])
-            print(nn_indexes[i_min])
-        w_m, mu_m, cov_m = merge(w[i_min], mu[i_min], cov[i_min], 
-                                 w[j_min], mu[j_min], cov[j_min])
-        # updating structures
-        nindex = min(i_min,j_min) # index of the new component
-        dindex = max(i_min,j_min) # index of the del component
-        w[nindex] = w_m; mu[nindex] = mu_m; cov[nindex] = cov_m
-        indexes = np.delete(indexes, get_index(indexes,dindex))
-        update_merge_mapping(merge_mapping, nindex, dindex)
-        if cur_mixture_size <= n_neighbors+1:
-            alive_neighbors = np.delete(indexes, get_index(indexes,nindex))
-            nn_indexes[nindex,:] = MAXINT
-            nn_indexes[nindex,0:len(alive_neighbors)] = alive_neighbors 
-        else:
-            nn_indexes[nindex] = radius_search(BTree, mu_m, n_neighbors, merge_mapping, nindex)
-        update_structs(nn_indexes, diss_matrix, w, mu, cov, indexes, nindex, dindex)
-        cur_mixture_size -= 1
-        if verbose: print('{2}: Merged components {0} and {1}'.format(i_min, j_min, cur_mixture_size)) 
-
-        if build_htree:
-            # updating the hierarchical tracking structures
-            i_min = entity_key_mapping[i_min]
-            j_min = entity_key_mapping[j_min] 
-            decomp_dict[new_entity] = (i_min,j_min)
-            join_dict[(i_min,j_min)] = new_entity
-            entity_dict[new_entity] = entity_dict[i_min]+entity_dict[j_min]
-
-            entity_key_mapping[nindex] = new_entity
-            del entity_key_mapping[dindex]
-            new_entity += 1
-
-    if not build_htree: 
-        return w[indexes],mu[indexes],cov[indexes]
-    return decomp_dict,join_dict,entity_dict
-
-
-
-def reduce_mixture(w, mu, cov, n_comp=1, n_neighbors=None,
-                      verbose=True):
+def reduce_mixture(w, mu, cov, n_comp=1, n_neighbors=None, verbose=True):
     """
     Gaussian Mixture Reduction Through KL-upper bound approach
     """
@@ -511,7 +388,7 @@ def reduce_mixture(w, mu, cov, n_comp=1, n_neighbors=None,
 
 
 
-def agglomerate(w, mu, cov, n_comp=1, n_neighbors=None,
+def agglomerate_kl(w, mu, cov, n_comp=1, n_neighbors=None,
                 verbose=True):
     """
     Gaussian Mixture Reduction Through KL-upper bound approach
@@ -623,7 +500,8 @@ def update_diss_matrix(w, mu, cov, diss_matrix, indexes, nindex, entity_key_mapp
         ind1 = entity_dict[_nindex]
         ind2 = entity_dict[_j]
         diss_matrix[nindex,j] = compute_isd(w[ind1],mu[ind1,:],cov[ind1],w[ind2],mu[ind2,:],cov[ind2])
-    
+
+        
 def agglomerate_isd(w, mu, cov, n_comp=1, verbose=True):
     """
     Gaussian Mixture Reduction Through ISD approach
