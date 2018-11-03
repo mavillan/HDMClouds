@@ -935,7 +935,8 @@ class HDICE():
             print('nfev: {0}'.format(self.scipy_sol['nfev']))
             print("xtol: {0}".format(self.scipy_tol))
             print("ftol: {0}".format(self.scipy_tol))
-         
+      
+    
     def summarize(self, solver_output=True, residual_stats=True, solution_plot=True,
                   params_plot=True, histograms_plot=True):
         print('\n \n' + '#'*90)    
