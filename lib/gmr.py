@@ -218,7 +218,7 @@ def least_dissimilar(diss_matrix, indexes, nn_indexes):
     for _i in range(len(indexes)):
         i = indexes[_i]
         for j in range(max_neigh):
-            if diss_matrix[i,j]==-1: continue
+            if diss_matrix[i,j]<0.: continue
             if diss_matrix[i,j]==np.inf: break
             if diss_matrix[i,j]<diss_min:
                 diss_min = diss_matrix[i,j]
@@ -262,23 +262,26 @@ def update_merge_mapping(merge_mapping, nindex, dindex):
 
 @numba.jit()
 def radius_search(BTree, mu, n_neighbors, merge_mapping, nindex):
-    # performing nn-search through BallTree
     n_samples = BTree.data.shape[0]
-    k_query = min(2*n_neighbors, n_samples)
-    neigh_array = BTree.query([mu], k=k_query, return_distance=False, sort_results=True)[0]
-    # applying the mapping
-    neigh_array = merge_mapping[neigh_array]
-    # removing repeated neighbors and mainting the order!
-    _,unique_indexes = np.unique(neigh_array, return_index=True)
-    unique_indexes = np.sort(unique_indexes)
-    neigh_array = neigh_array[unique_indexes]
-    # removing nindex from neighbors
-    neigh_array = np.delete(neigh_array, get_index(neigh_array,nindex))
-    # returning the first n_neighbors neighbors
-    ret = MAXINT*np.ones(n_neighbors, dtype=np.int32)
-    ret[0:len(neigh_array)] = neigh_array[0:n_neighbors]
-    return ret
-
+    k_query_list = list(range(n_neighbors, n_samples, n_neighbors))+[n_samples]
+    for k_query in k_query_list:
+        # performing nn-search through BallTree
+        neigh_array = BTree.query([mu], k=k_query, return_distance=False, sort_results=True)[0]
+        # applying the mapping
+        neigh_array = merge_mapping[neigh_array]
+        # removing repeated neighbors but maintaining the order
+        _,unique_indexes = np.unique(neigh_array, return_index=True)
+        unique_indexes = np.sort(unique_indexes)
+        neigh_array = neigh_array[unique_indexes]
+        # removing nindex from neighbors
+        neigh_array = np.delete(neigh_array, get_index(neigh_array,nindex))
+        # if neigh_array is not empty -> return it
+        if len(neigh_array)!=0:
+            # returning the first n_neighbors neighbors
+            ret = MAXINT*np.ones(n_neighbors, dtype=np.int32)
+            ret[0:len(neigh_array)] = neigh_array[0:n_neighbors]
+            return ret
+    return np.array([], dtype=np.int32)
 
 @numba.jit('(int32[:,:], float64[:,:], float64[:], float64[:,:], float64[:,:,:], int32[:], int32, int32)',
            nopython=True, fastmath=True, parallel=True)
@@ -388,8 +391,7 @@ def reduce_mixture(w, mu, cov, n_comp=1, n_neighbors=None, verbose=True):
 
 
 
-def agglomerate_kl(w, mu, cov, n_comp=1, n_neighbors=None,
-                verbose=True):
+def agglomerate_kl(w, mu, cov, n_comp=1, n_neighbors=None, verbose=True):
     """
     Gaussian Mixture Reduction Through KL-upper bound approach
     """
@@ -432,13 +434,21 @@ def agglomerate_kl(w, mu, cov, n_comp=1, n_neighbors=None,
     
     # BTree for efficient searches
     BTree,nn_indexes = _compute_neighbors(mu, n_neighbors)
+    if nn_indexes.shape[1]<n_neighbors:
+        # pathological case: too small ICE
+        n_neighbors = nn_indexes.shape[1]
     diss_matrix = build_diss_matrix(w, mu, cov, nn_indexes)
 
     # main mixture reduction loop
-    while cur_mixture_size > tar_mixture_size:
+    while cur_mixture_size > tar_mixture_size:            
         # approximated GMR for improved performance
         i_min,j_min = least_dissimilar(diss_matrix, indexes, nn_indexes)
         if i_min==-1:
+            print(cur_mixture_size)
+            print(diss_matrix[i_min])
+            print(nn_indexes[i_min])
+            #print(diss_matrix)
+        if j_min==-1:
             print(cur_mixture_size)
             print(diss_matrix[i_min])
             print(nn_indexes[i_min])
@@ -450,13 +460,12 @@ def agglomerate_kl(w, mu, cov, n_comp=1, n_neighbors=None,
         w[nindex] = w_m; mu[nindex] = mu_m; cov[nindex] = cov_m
         indexes = np.delete(indexes, get_index(indexes,dindex))
         update_merge_mapping(merge_mapping, nindex, dindex)
-        if cur_mixture_size <= n_neighbors+1:
-            alive_neighbors = np.delete(indexes, get_index(indexes,nindex))
-            nn_indexes[nindex,:] = MAXINT
-            nn_indexes[nindex,0:len(alive_neighbors)] = alive_neighbors 
-        else:
-            nn_indexes[nindex] = radius_search(BTree, mu_m, n_neighbors, merge_mapping, nindex)
-        update_structs(nn_indexes, diss_matrix, w, mu, cov, indexes, nindex, dindex)
+        if cur_mixture_size>2:
+            # trick to avoid problems in the last iteration
+            out = radius_search(BTree, mu_m, n_neighbors, merge_mapping, nindex)
+            nn_indexes[nindex] = out
+            update_structs(nn_indexes, diss_matrix, w, mu, cov, indexes, nindex, dindex)
+            
         cur_mixture_size -= 1
         if verbose: print('{2}: Merged components {0} and {1}'.format(i_min, j_min, cur_mixture_size)) 
 
@@ -499,7 +508,7 @@ def update_diss_matrix(w, mu, cov, diss_matrix, indexes, nindex, entity_key_mapp
         _j = entity_key_mapping[j]
         ind1 = entity_dict[_nindex]
         ind2 = entity_dict[_j]
-        diss_matrix[nindex,j] = compute_isd(w[ind1],mu[ind1,:],cov[ind1],w[ind2],mu[ind2,:],cov[ind2])
+        diss_matrix[nindex,j] = compute_nisd(w[ind1],mu[ind1,:],cov[ind1],w[ind2],mu[ind2,:],cov[ind2])
 
         
 def agglomerate_isd(w, mu, cov, n_comp=1, verbose=True):
@@ -539,7 +548,7 @@ def agglomerate_isd(w, mu, cov, n_comp=1, verbose=True):
     diss_matrix[:,:] = np.inf  
     for i in range(cur_mixture_size):
         for j in range(i+1,cur_mixture_size):
-            diss_matrix[i,j] = compute_isd(w[[i]], mu[[i],:], cov[[i]], w[[j]], mu[[j],:], cov[[j]])
+            diss_matrix[i,j] = compute_nisd(w[[i]], mu[[i],:], cov[[i]], w[[j]], mu[[j],:], cov[[j]])
 
     # main mixture reduction loop
     while cur_mixture_size > tar_mixture_size:
