@@ -60,7 +60,7 @@ class HDMClouds():
     Hierarchical Decomposition of Molecular Clouds
     """
     def __init__(self, data, freq=None, n_gaussians=250, alpha=0., lamb=1., 
-                 back_level=None, minsig=None, maxsig=None, kappa=5., 
+                 back_level=None, minsig=None, maxsig=None, kappa=5., eps=None,
                  bound_spacing=None, verbose=False, wcs=None):
 
         #############################################################
@@ -167,10 +167,11 @@ class HDMClouds():
         #if self.ndim==3: pix_lenght_ = sum([1./data.shape[0], 1./data.shape[1], 1./data.shape[2]])/3.
         sig_init = (pix_lenght/(2.*k))*np.ones(w_init.shape[0])
 
-        # DBSAN to find isolated structures
-        if self.ndim==2: radio = np.sqrt(2)*pix_lenght
-        if self.ndim==3: radio = np.sqrt(3)*pix_lenght
-        db = DBSCAN(eps=radio, min_samples=4, n_jobs=-1)
+        # DBSAN to find isolated structure
+        if eps is None:
+            if self.ndim==2: eps = np.sqrt(2)*pix_lenght
+            if self.ndim==3: eps = np.sqrt(3)*pix_lenght
+        db = DBSCAN(eps=eps, min_samples=4, n_jobs=-1)
         db.fit(mu_init)
         db_labels = db.labels_ # predicted labels
         print("[INFO] Number of ICEs: {0}".format(db_labels.max()+1))
@@ -214,7 +215,7 @@ class HDMClouds():
                               bound_points=bound_points[_bmask])
             if self.ndim==3:
                 hdice = HDICE(w_init[_mask], mu_init[_mask], sig_init[_mask], 
-                              back_level, alpha, lamb, compression, 
+                              back_level, alpha, lamb, compression, kappa=kappa,
                               xgrid_global=xgrid, ygrid_global=ygrid, zgrid_global=zgrid, 
                               bound_points=None)
 
@@ -357,7 +358,7 @@ class HDMClouds():
         u = u.reshape(self.shape)
         return u
 
-    def get_residual_stats(self, plot=True):
+    def get_residual_stats(self, verbose=True):
         u = self.get_approximation()
         if self.mask is not None:
             residual = np.zeros(self.shape)
@@ -366,11 +367,11 @@ class HDMClouds():
             residual = self.data-u
 
         # visualization original data, u and residual
-        if plot and self.ndim==2:
+        if verbose and self.ndim==2:
             gp.solution_plot(self.data, u, residual)
             gp.residual_histogram(residual[self.mask])
 
-        if plot and self.ndim==3:
+        if verbose and self.ndim==3:
             print("-"*110)
             print("ORIGINAL DATA")
             gp.cube_plot(self.data, wcs=self.wcs, freq=self.freq)
@@ -389,16 +390,17 @@ class HDMClouds():
         flux_lost = np.sum(residual[~flux_mask])
 
         # output residuals
-        out = (estimate_rms(residual), estimate_variance(residual), \
+        out = (estimate_rms(residual), np.max(np.abs(residual)), estimate_variance(residual), \
                flux_addition/total_flux, flux_lost/total_flux)
         
         # printing output
-        print("RESIDUAL STATS")
-        print("RMS of residual: {0}".format(out[0]))
-        print("Inf norm of residual: {0}".format(np.max(np.abs(residual))))
-        print("Variance of residual: {0}".format(out[1]))
-        print("Normalized flux addition: {0}".format(out[2]))
-        print("Normalized flux lost: {0}".format(out[3]))
+        if verbose:
+            print("RESIDUAL STATS")
+            print("RMS of residual: {0}".format(out[0]))
+            print("Inf norm of residual: {0}".format(out[1]))
+            print("Variance of residual: {0}".format(out[2]))
+            print("Normalized flux addition: {0}".format(out[3]))
+            print("Normalized flux lost: {0}".format(out[4]))
         return out
 
     def prune(self):
