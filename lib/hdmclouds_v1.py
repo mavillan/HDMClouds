@@ -61,7 +61,7 @@ class HDMClouds():
     """
     def __init__(self, data, freq=None, n_gaussians=250, alpha=0., lamb=1., 
                  back_level=None, minsig=None, maxsig=None, kappa=5., eps=None,
-                 bound_spacing=None, verbose=False, wcs=None):
+                 bound_spacing=None, gmr_neighbors=None, verbose=False, wcs=None):
 
         #############################################################
         # Preprocessing: Estimation of back_level, computing mask, 
@@ -210,12 +210,14 @@ class HDMClouds():
 
             if self.ndim==2:
                 hdice = HDICE(w_init[_mask], mu_init[_mask], sig_init[_mask], 
-                              back_level, alpha, lamb, compression, 
+                              back_level, alpha, lamb, compression, kappa=kappa,
+                              gmr_neighbors=gmr_neighbors,
                               xgrid_global=xgrid, ygrid_global=ygrid, 
                               bound_points=bound_points[_bmask])
             if self.ndim==3:
                 hdice = HDICE(w_init[_mask], mu_init[_mask], sig_init[_mask], 
                               back_level, alpha, lamb, compression, kappa=kappa,
+                              gmr_neighbors=gmr_neighbors,
                               xgrid_global=xgrid, ygrid_global=ygrid, zgrid_global=zgrid, 
                               bound_points=None)
 
@@ -649,9 +651,9 @@ class HDICE():
     Hierarchical Decomposition of Independent/Isolated Cloud Entities
     """
     def __init__(self, w_init, mu_init, sig_init, back_level, alpha, lamb, compression, 
-                 minsig=None, maxsig=None, kappa=5., verbose=False, xgrid_global=None, 
-                 ygrid_global=None, zgrid_global=None, bound_points=None, 
-                 min_num_gaussians=3):
+                 minsig=None, maxsig=None, kappa=5., gmr_neighbors=None, verbose=False, 
+                 xgrid_global=None, ygrid_global=None, zgrid_global=None, bound_points=None, 
+                 min_num_gaussians=5):
 
         self.ndim = mu_init.shape[1]
         # Max intensity in the CE
@@ -678,13 +680,15 @@ class HDICE():
         # target number of gaussians
         n_gaussians = max(int(len(w_init)*compression), min_num_gaussians)
 
-        w_red, mu_red, cov_red = reduce_mixture(w_init, mu_init, sig_init, 2*n_gaussians, verbose=False)
+        w_red, mu_red, cov_red = reduce_mixture(w_init, mu_init, sig_init, 2*n_gaussians, 
+                                                n_neighbors=gmr_neighbors, verbose=False)
         xe = mu_red[:,0]
         ye = mu_red[:,1]
         if self.ndim==3: ze = mu_red[:,2]
         eval_points = mu_red
 
-        w, mu, cov = reduce_mixture(w_red, mu_red, cov_red, n_gaussians, verbose=False)
+        w, mu, cov = reduce_mixture(w_red, mu_red, cov_red, n_gaussians, 
+                                    n_neighbors=gmr_neighbors, verbose=False)
         xc = mu[:,0]
         yc = mu[:,1]
         if self.ndim==3: zc = mu[:,2]
@@ -1028,13 +1032,14 @@ class HDICE():
         self.scipy_sol = sol
         self.elapsed_time = time.time() - t0
 
-    def build_htree(self, htree_algo="KL"):
+    def build_htree(self, htree_algo="KL", n_neighbors=None):
         w,sig = self.get_params_mapped()
         if self.ndim==2: mu = np.vstack([self.xc,self.yc]).T
         if self.ndim==3: mu = np.vstack([self.xc,self.yc,self.zc]).T
+        if n_neighbors is None: n_neighbors = self.gmr_neighbors
         
         if htree_algo=="KL":
-            htree = agglomerate_kl(w, mu, sig, verbose=False)
+            htree = agglomerate_kl(w, mu, sig, n_neighbors=n_neighbors, verbose=False)
         elif htree_algo=="ISD":
             htree = agglomerate_isd(w, mu, sig, verbose=False)
         decomp_dict,join_dict,entity_dict = htree

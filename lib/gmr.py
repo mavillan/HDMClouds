@@ -283,6 +283,7 @@ def radius_search(BTree, mu, n_neighbors, merge_mapping, nindex):
             return ret
     return np.array([], dtype=np.int32)
 
+
 @numba.jit('(int32[:,:], float64[:,:], float64[:], float64[:,:], float64[:,:,:], int32[:], int32, int32)',
            nopython=True, fastmath=True, parallel=True)
 def update_structs(nn_indexes, diss_matrix, w, mu, cov, indexes, nindex, dindex):
@@ -351,6 +352,8 @@ def reduce_mixture(w, mu, cov, n_comp=1, n_neighbors=None, verbose=True):
         # one neighbor for each considered degree of freedom
         if d==2: n_neighbors=8
         if d==3: n_neighbors=26
+    
+    print(n_neighbors)
 
     # indexes of "alive" mixture components
     indexes = np.arange(cur_mixture_size, dtype=np.int32)
