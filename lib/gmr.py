@@ -352,8 +352,6 @@ def reduce_mixture(w, mu, cov, n_comp=1, n_neighbors=None, verbose=True):
         # one neighbor for each considered degree of freedom
         if d==2: n_neighbors=8
         if d==3: n_neighbors=26
-    
-    print(n_neighbors)
 
     # indexes of "alive" mixture components
     indexes = np.arange(cur_mixture_size, dtype=np.int32)

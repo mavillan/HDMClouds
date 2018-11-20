@@ -109,6 +109,7 @@ class HDMClouds():
         self.dfunc = dfunc
         self.wcs = wcs
         self.pix_lenght = pix_lenght
+        self.gmr_neighbors = gmr_neighbors
         
         # Verification of consistency between n_center and number of significant emission pixels
         npix = np.sum(mask)
@@ -471,10 +472,10 @@ class HDMClouds():
         # storing the total elapsed time    
         self.elapsed_time = time.time() - t0
 
-    def build_hierarchical_tree(self, htree_algo="KL"):
+    def build_hierarchical_tree(self, htree_algo="KL", n_neighbors=None):
         for i,hdice in enumerate(self.hdice_list):
             print("Building the hierarchical tree for Isolated Cloud Entity {0}".format(self.hdice_keys[i]))
-            hdice.build_htree(htree_algo=htree_algo)
+            hdice.build_htree(htree_algo=htree_algo, n_neighbors=n_neighbors)
             print("DONE\n")
 
         # global list of splittable and joinable cloud entities
@@ -784,6 +785,7 @@ class HDICE():
         self.alpha = alpha
         self.lamb = lamb
         self.back_level = back_level
+        self.gmr_neighbors = gmr_neighbors
         self.scipy_sol = None
         self.scipy_tol = None
         self.elapsed_time = None
