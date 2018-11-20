@@ -401,7 +401,6 @@ def ce_plot(hdmc, show_title=False, cmap1=plt.cm.gray_r,
     np.random.seed(19); 
     np.random.shuffle(color)
     color = color[0:num_ce]
-    levels = [0.025] # JARCOR VALUE
 
 
     for i,CEid in enumerate(hdmc.splittable):
@@ -412,6 +411,9 @@ def ce_plot(hdmc, show_title=False, cmap1=plt.cm.gray_r,
         params = hdice.get_params_filtered(indexes)
         u = hdice.get_approximation_global(params)
         u = u.reshape(hdmc.shape)
+
+        # to contours are plot at the level of the boundary of each ICE
+        levels= [hdice.fb[(hdice.fb)>0.].min()]
 
         if manual_label:
             cs = ax.contour(u, levels=levels, colors=[color[i]], linewidths=4)
