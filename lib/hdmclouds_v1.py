@@ -343,7 +343,7 @@ class HDMClouds():
 
     def normalized_w(self):
         """
-        Get the mapping from the 'c' coefficients in the linear
+        Get the mapping from the 'w' coefficients in the linear
         combination of Gausssian functions, to the 'w' in the
         linear combination of Normal functions. 
         """
@@ -681,6 +681,8 @@ class HDICE():
         # target number of gaussians
         n_gaussians = max(int(len(w_init)*compression), min_num_gaussians)
 
+        # to Normal transformation
+        w_init = w_init * (2*np.pi*sig_init**2)**(self.ndim/2.)
         w_red, mu_red, cov_red = reduce_mixture(w_init, mu_init, sig_init, 2*n_gaussians, 
                                                 n_neighbors=gmr_neighbors, verbose=False)
         xe = mu_red[:,0]
@@ -697,10 +699,12 @@ class HDICE():
 
         # truncation of the covariance matrices
         sig = np.asarray( [np.mean((np.linalg.eig(_cov)[0]))**(1./2) for _cov in cov] )
-
         minsig = np.min(np.abs(sig))
         maxsig = 3*np.max(np.abs(sig))
         epsilon = 1e-6 # little shift to avoid NaNs in inv_sig_mapping
+        
+        # Normal to Gaussian
+        w = w / (2*np.pi*sig**2)**(self.ndim/2.)
 
         #######################################
         # Computing neighborhoods
@@ -859,8 +863,8 @@ class HDICE():
 
     def normalized_w(self):
         """
-        Get the mapping from the 'c' coefficients in the linear
-        combination of Gausssian functions, to the 'w' in the
+        Get the mapping from the 'w' coefficients in the linear
+        combination of Gausssian functions, to the 'w_hat' in the
         linear combination of Normal functions. 
         """
         w,sig = self.get_params_mapped()
@@ -1035,7 +1039,8 @@ class HDICE():
         self.elapsed_time = time.time() - t0
 
     def build_htree(self, htree_algo="KL", n_neighbors=None):
-        w,sig = self.get_params_mapped()
+        w = self.normalized_w()
+        _,sig = self.get_params_mapped() 
         if self.ndim==2: mu = np.vstack([self.xc,self.yc]).T
         if self.ndim==3: mu = np.vstack([self.xc,self.yc,self.zc]).T
         if n_neighbors is None: n_neighbors = self.gmr_neighbors
