@@ -414,14 +414,32 @@ def ce_plot(hdmc, show_title=False, cmap1=plt.cm.gray_r,
 
         # to contours are plot at the level of the boundary of each ICE
         levels= [hdice.fb[(hdice.fb)>0.].min()]
-
+        
+        if CEid=="B-1":
+            print(CEid)
+            print(levels)
+            print(u.min())
+            print(u.max())
+            _,_,c,sig = params
+            print("c",c)
+            print("sig",sig)
         if manual_label:
-            cs = ax.contour(u, levels=levels, colors=[color[i]], linewidths=4)
-            ax.clabel(cs, cs.levels, inline=True, fmt=CEid, fontsize=13, manual=manual_label)
+            try:
+                cs = ax.contour(u, levels=levels, colors=[color[i]], linewidths=4)
+                ax.clabel(cs, cs.levels, inline=True, fmt=CEid, fontsize=13, manual=manual_label)
+            except:
+                levels = [u[u>0.].min()]
+                cs = ax.contour(u, levels=levels, colors=[color[i]], linewidths=4)
+                ax.clabel(cs, cs.levels, inline=True, fmt=CEid, fontsize=13, manual=manual_label)
         else:
-            cs = ax.contour(u, levels=levels, colors=[color[i]], linewidths=4)
-            ax.clabel(cs, cs.levels, inline=True, fmt=CEid, fontsize=13)
-            #ax.clabel(cs, cs.levels, inline=True, fmt="S"+CEid.split("-")[1], fontsize=13)
+            try:
+                cs = ax.contour(u, levels=levels, colors=[color[i]], linewidths=4)
+                ax.clabel(cs, cs.levels, inline=True, fmt=CEid, fontsize=13)
+                #ax.clabel(cs, cs.levels, inline=True, fmt="S"+CEid.split("-")[1], fontsize=13)
+            except:
+                levels = [u[u>0.].min()]
+                cs = ax.contour(u, levels=levels, colors=[color[i]], linewidths=4)
+                ax.clabel(cs, cs.levels, inline=True, fmt=CEid, fontsize=13)          
         
     if save_path is not None:
         plt.savefig(save_path, format='eps', dpi=150, bbox_inches='tight')
@@ -693,7 +711,7 @@ def ce_plot_3d(hdmc, show_title=False, cmap1=plt.cm.cubehelix,
             _u = u.sum(axis=axis)
             if axis==2: _u = _u.T  
                 
-            levels = [0.2*hdmc.back_level]
+            levels = [0.9*hdmc.back_level]
             cs = ax.contour(_u, levels=levels, colors=[color[i]], linewidths=4)
             ax.clabel(cs, cs.levels, inline=True, fmt=CEid, fontsize=13)
         ax.set_aspect('auto')
