@@ -101,32 +101,36 @@ def snr_estimation(data, noise=None, points=1000, full_output=False):
         return snrlimit, noise, x, y, v, n, p
     return snrlimit
 
-
+    
+def load_data(fits_path):    
+    try:
+        cube = SpectralCube.read(fits_path)
+        hdu = cube.hdu
+        data = cube.base
+        wcs = WCS(hdu.header)
+        # extracting spectra in case of cubes
+        spec = np.array((cube.spectral_axis).to(units.GHz))[::-1]
+        load_out = {"hdu":hdu, "wcs":wcs, "spec":spec}
+    except:
+        print("FITS not compatible with SpectralCube, loaded with AstroPy.")
+        hdu = fits.open(fits_path)[0]
+        data = hdu.data
+        wcs = WCS(hdu.header)
+        load_out = {"hdu":hdu, "wcs":wcs}
         
-def load_data(fits_path):
-    cube = SpectralCube.read(fits_path)
-    hdu = cube.hdu
-    data = cube.base
-    wcs = WCS(hdu.header)
-
     if data.ndim>3:
         # droping out the stokes dimension
         data = np.ascontiguousarray(data[0])
         wcs = wcs.dropaxis(3)
-
         if data.shape[0]==1:
             # in case data is not a cube but an image
             data = np.ascontiguousarray(data[0])
             wcs = wcs.dropaxis(2)
-    
     # in case NaN values exist on data
     mask = np.isnan(data)
     if np.any(mask): data = ma.masked_array(data, mask=mask)
-
-    # computing spectra in case of cubes
-    freq = np.array((cube.spectral_axis).to(units.GHz))[::-1]
-
-    return data,wcs,hdu,freq
+    load_out["data"] = data
+    return load_out
 
 
 def sig_mapping(sig, minsig=0., maxsig=1.):
