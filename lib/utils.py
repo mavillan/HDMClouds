@@ -110,13 +110,13 @@ def load_data(fits_path):
         wcs = WCS(hdu.header)
         # extracting spectra in case of cubes
         spec = np.array((cube.spectral_axis).to(units.GHz))[::-1]
-        load_out = {"hdu":hdu, "wcs":wcs, "spec":spec}
+        load_out = {"hdu":hdu, "spec":spec}
     except:
         print("FITS not compatible with SpectralCube, loaded with AstroPy.")
         hdu = fits.open(fits_path)[0]
         data = hdu.data
         wcs = WCS(hdu.header)
-        load_out = {"hdu":hdu, "wcs":wcs}
+        load_out = {"hdu":hdu}
         
     if data.ndim>3:
         # droping out the stokes dimension
@@ -129,7 +129,9 @@ def load_data(fits_path):
     # in case NaN values exist on data
     mask = np.isnan(data)
     if np.any(mask): data = ma.masked_array(data, mask=mask)
+        
     load_out["data"] = data
+    load_out["wcs"] = wcs
     return load_out
 
 
