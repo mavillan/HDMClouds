@@ -415,14 +415,6 @@ def ce_plot(hdmc, show_title=False, cmap1=plt.cm.gray_r,
         # to contours are plot at the level of the boundary of each ICE
         levels= [hdice.fb[(hdice.fb)>0.].min()]
         
-        if CEid=="B-1":
-            print(CEid)
-            print(levels)
-            print(u.min())
-            print(u.max())
-            _,_,c,sig = params
-            print("c",c)
-            print("sig",sig)
         if manual_label:
             try:
                 cs = ax.contour(u, levels=levels, colors=[color[i]], linewidths=4)
@@ -437,6 +429,8 @@ def ce_plot(hdmc, show_title=False, cmap1=plt.cm.gray_r,
                 ax.clabel(cs, cs.levels, inline=True, fmt=CEid, fontsize=13)
                 #ax.clabel(cs, cs.levels, inline=True, fmt="S"+CEid.split("-")[1], fontsize=13)
             except:
+                _,_,c,sig = params
+                print("c_values",c[c>0])
                 levels = [u[u>0.].min()]
                 cs = ax.contour(u, levels=levels, colors=[color[i]], linewidths=4)
                 ax.clabel(cs, cs.levels, inline=True, fmt=CEid, fontsize=13)          
@@ -448,10 +442,6 @@ def ce_plot(hdmc, show_title=False, cmap1=plt.cm.gray_r,
     if unit is not None: cbar.set_label("[{0}]".format(unit))
     ax.set_aspect('auto')
     plt.show()
-
-    
-    
-
 
 
 def caa_show(data, caa, save_path=None, wcs=None):
