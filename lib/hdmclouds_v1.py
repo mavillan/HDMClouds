@@ -255,7 +255,7 @@ class HDMClouds():
         eval_points_global = np.vstack(eval_points_global)
 
         # computing neighborhood indexes to perform fast GM evaluation
-        minsig = np.min(np.abs(sig_global))
+        minsig = np.min(np.abs(sig_global))/3.
         maxsig = 3*np.max(np.abs(sig_global))
         nn_indexes,nn_indexes_aux = compute_neighbors(mu_global, grid_points, kappa*maxsig)
         self.nn_ind = nn_indexes
@@ -406,17 +406,6 @@ class HDMClouds():
             print("Normalized flux lost: {0}".format(out[4]))
         return out
 
-    def prune(self):
-        w = self.w
-        mean = np.mean(w)
-        median = np.median(w)
-        # all values greater than 1e-3 the mean/median
-        mask = w > 1e-3*min(mean,median)
-        # update all the arrays
-        self.xc = self.xc[mask]
-        self.yc = self.yc[mask]
-        self.w = self.w[mask]
-        self.sig = self.sig[mask]
     
     def summarize(self, solver_output=True, residual_stats=True, solution_plot=True,
                   params_plot=True, histograms_plot=True):
@@ -448,29 +437,39 @@ class HDMClouds():
         Build the Gaussian Mixture Representation for the
         input data
         """
-        t0 = time.time()
-
-        w_global = list(); sig_global = list()
+        self.elapsed_time = 0
+        w_global = list(); mu_global = list(); sig_global = list()
         for i,hdice in enumerate(self.hdice_list):
             print("-"*45)
             print("Building GM for Isolated Cloud Entity {0}".format(self.hdice_keys[i]))
             print("-"*45)
             hdice.build_gmr(max_nfev=max_nfev, tol=tol)
             _w,_sig = hdice.get_params_mapped()
+            _mu = hdice.center_points
+            # -----------------------------------------
             w_global.append(_w)
+            mu_global.append(_mu)
             sig_global.append(_sig)
             if verbose: hdice.get_residual_stats(); print("\n")
-
+            # elapsed time of each hdice is accumulated
+            self.elapsed_time += hdice.elapsed_time
+                    
         # updating the global GM parameters
         w_global = np.hstack(w_global)
+        mu_global = np.vstack(mu_global)
         sig_global = np.hstack(sig_global)
         self.set_params(w_global, sig_global)
-
-        # prune of gaussians from mixture
-        #self.prune()
-    
-        # storing the total elapsed time    
-        self.elapsed_time = time.time() - t0
+        
+        if len(w_global)<len(self.w0):
+            # prunning has occurred
+            self.xc = mu_global[:,0]; self.yc = mu_global[:,1] 
+            if self.ndim==3: self.zc = mu_global[:,2]
+            # computing neighborhood indexes to perform fast GM evaluation
+            nn_indexes,nn_indexes_aux = compute_neighbors(mu_global, 
+                                                          self.grid_points, 
+                                                          self.kappa*self.maxsig)
+            self.nn_ind = nn_indexes
+            self.nn_ind_aux = nn_indexes_aux
 
     def build_hierarchical_tree(self, htree_algo="KL", n_neighbors=None):
         for i,hdice in enumerate(self.hdice_list):
@@ -699,7 +698,7 @@ class HDICE():
 
         # truncation of the covariance matrices
         sig = np.asarray( [np.mean((np.linalg.eig(_cov)[0]))**(1./2) for _cov in cov] )
-        minsig = np.min(np.abs(sig))
+        minsig = np.min(np.abs(sig))/3.
         maxsig = 3*np.max(np.abs(sig))
         epsilon = 1e-6 # little shift to avoid NaNs in inv_sig_mapping
         
@@ -937,6 +936,40 @@ class HDICE():
         self.yc = self.yc[mask]
         self.w = self.w[mask]
         self.sig = self.sig[mask]
+        center_points = np.vstack([self.xc,self.yc]).T
+        self.center_points = center_points
+        
+        # as components are being prunned, we need to re-compute nn_indexes
+        nn_indexes,nn_indexes_aux = compute_neighbors(center_points, 
+                                                      self.eval_points, 
+                                                      self.kappa*self.maxsig)
+        self.nn_ind1 = nn_indexes
+        self.nn_ind1_aux = nn_indexes_aux
+
+        if self.bound_points is not None:
+            nn_indexes,nn_indexes_aux = compute_neighbors(center_points, 
+                                                          self.bound_points, 
+                                                          self.kappa*self.maxsig)
+            self.nn_ind2 = nn_indexes
+            self.nn_ind2_aux = nn_indexes_aux
+        else:
+            self.nn_ind2 = None
+            self.nn_ind2_aux = None
+
+        nn_indexes,nn_indexes_aux = compute_neighbors(center_points, 
+                                                      self.grid_points, 
+                                                      self.kappa*
+                                                      self.maxsig)
+        self.nn_ind3 = nn_indexes
+        self.nn_ind3_aux = nn_indexes_aux
+
+        nn_indexes,nn_indexes_aux = compute_neighbors(center_points, 
+                                                      self.grid_points_global, 
+                                                      self.kappa*
+                                                      self.maxsig)
+        self.nn_ind4 = nn_indexes
+        self.nn_ind4_aux = nn_indexes_aux
+        
 
     def solver_output(self):
         if self.scipy_sol is not None:
@@ -1030,13 +1063,13 @@ class HDICE():
         # update to best parameters
         self.set_w(opt_w)
         self.set_sig(opt_sig)
-
+        
+        self.elapsed_time = time.time() - t0
         # prune of gaussians from mixture
-        #self.prune()
-    
+        self.prune()
         # storing results    
         self.scipy_sol = sol
-        self.elapsed_time = time.time() - t0
+
 
     def build_htree(self, htree_algo="KL", n_neighbors=None):
         w = self.normalized_w()
