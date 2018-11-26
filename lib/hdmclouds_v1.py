@@ -653,7 +653,7 @@ class HDICE():
     def __init__(self, w_init, mu_init, sig_init, back_level, alpha, lamb, compression, 
                  minsig=None, maxsig=None, kappa=5., gmr_neighbors=None, verbose=False, 
                  xgrid_global=None, ygrid_global=None, zgrid_global=None, bound_points=None, 
-                 min_num_gaussians=5):
+                 min_num_gaussians=10):
 
         self.ndim = mu_init.shape[1]
         # Max intensity in the CE
@@ -1051,6 +1051,7 @@ class HDICE():
         #sol = sp.optimize.root(self.F, self.get_params(), method='lm', options=options)
         while True:
             options = {'xtol':tol, 'ftol':tol}
+            if max_nfev is not None: options["maxiter"] = max_nfev
             sol = sp.optimize.root(self.F, self.get_params(), method='lm', options=options)
             if sol["status"]!=2: 
                 self.scipy_tol = tol
