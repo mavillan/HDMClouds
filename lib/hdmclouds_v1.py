@@ -934,9 +934,12 @@ class HDICE():
         # update all the arrays
         self.xc = self.xc[mask]
         self.yc = self.yc[mask]
+        if self.ndim==3: self.zc = self.zc[mask]
         self.w = self.w[mask]
         self.sig = self.sig[mask]
-        center_points = np.vstack([self.xc,self.yc]).T
+        
+        if self.ndim==2: center_points = np.vstack([self.xc,self.yc]).T
+        if self.ndim==3: center_points = np.vstack([self.xc,self.yc,self.zc]).T
         self.center_points = center_points
         
         # as components are being prunned, we need to re-compute nn_indexes
