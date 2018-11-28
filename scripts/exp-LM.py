@@ -1,5 +1,3 @@
-%matplotlib inline
-
 import pickle
 import os
 import sys
