@@ -392,7 +392,8 @@ class HDMClouds():
         flux_addition = -1. * np.sum(residual[flux_mask])
         flux_lost = np.sum(residual[~flux_mask])
 
-        # output residuals
+        if self.mask is not None:
+            residual = residual[self.mask]
         out = (estimate_rms(residual), np.max(np.abs(residual)), estimate_variance(residual), \
                flux_addition/total_flux, flux_lost/total_flux)
         
