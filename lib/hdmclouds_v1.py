@@ -3,6 +3,7 @@ import string
 import copy
 import scipy
 import numba
+import numexpr as ne
 import scipy as sp
 import numpy as np
 import pandas as pd
