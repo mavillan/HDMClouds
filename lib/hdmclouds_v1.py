@@ -257,9 +257,14 @@ class HDMClouds():
         # computing neighborhood indexes to perform fast GM evaluation
         minsig = np.min(np.abs(sig_global))/3.
         maxsig = 3*np.max(np.abs(sig_global))
+        
         nn_indexes,nn_indexes_aux = compute_neighbors(mu_global, grid_points, kappa*maxsig)
         self.nn_ind = nn_indexes
         self.nn_ind_aux = nn_indexes_aux
+        
+        nn_indexes1,nn_indexes_aux1 = compute_neighbors(mu_global, eval_points_global, kappa*maxsig)
+        self.nn_ind1 = nn_indexes1
+        self.nn_ind_aux1 = nn_indexes_aux1
 
         if verbose:
             # visualizing the choosen points
@@ -295,6 +300,7 @@ class HDMClouds():
         self.compression = compression
         self.alpha = alpha
         self.lamb = lamb
+        self.eval_points = eval_points_global
         self.elapsed_time = None
         self.residual_stats = None
 
@@ -360,8 +366,62 @@ class HDMClouds():
             u = gm_eval3d_2(w, sig, self.xc, self.yc, self.zc, self.xgrid, self.ygrid, self.zgrid, self.nn_ind, self.nn_ind_aux)
         u = u.reshape(self.shape)
         return u
+    
+    def _get_residual_stats(self):
+        """
+        Residual stats computed in evaluation points
+        """
+        all_residuals = list()
+        total_flux = 0
+        for hdice in self.hdice_list:
+            u = hdice._get_approximation()
+            _residual = hdice.f0-u
+            total_flux += np.sum(hdice.f0)
+            all_residuals.append(_residual)
+        residual = np.hstack(all_residuals)
+        # computing residual stats
+        flux_mask = residual<0.
+        flux_addition = -1. * np.sum(residual[flux_mask])
+        flux_lost = np.sum(residual[~flux_mask])  
+        out = (estimate_rms(residual), np.max(np.abs(residual)), estimate_variance(residual), \
+               flux_addition/total_flux, flux_lost/total_flux) 
+        return out
 
-    def get_residual_stats(self, verbose=True):
+    def get_residual_stats(self, verbose=False):
+        """
+        Residual stats computed in the significant emission pixels
+        """
+
+        # residuals are computed individually in each ICE
+        all_residuals = list()
+        total_flux = 0
+        for hdice in self.hdice_list:
+            u = hdice.get_approximation()
+            _residual = hdice.fgrid-u
+            total_flux += np.sum(hdice.fgrid)
+            all_residuals.append(_residual)
+        residual = np.hstack(all_residuals)
+        # computing residual stats
+        flux_mask = residual<0.
+        flux_addition = -1. * np.sum(residual[flux_mask])
+        flux_lost = np.sum(residual[~flux_mask])     
+        # output
+        out = (estimate_rms(residual), np.max(np.abs(residual)), estimate_variance(residual), \
+               flux_addition/total_flux, flux_lost/total_flux) 
+        # printing output
+        if verbose:
+            print("RESIDUAL STATS")
+            print("RMS of residual: {0}".format(out[0]))
+            print("Inf norm of residual: {0}".format(out[1]))
+            print("Variance of residual: {0}".format(out[2]))
+            print("Normalized flux addition: {0}".format(out[3]))
+            print("Normalized flux lost: {0}".format(out[4]))
+        return out
+    
+    def show_residuals(self):
+        """
+        Function to visualize the residuals
+        """
         u = self.get_approximation()
         if self.mask is not None:
             residual = np.zeros(self.shape)
@@ -370,11 +430,11 @@ class HDMClouds():
             residual = self.data-u
 
         # visualization original data, u and residual
-        if verbose and self.ndim==2:
+        if self.ndim==2:
             gp.solution_plot(self.data, u, residual)
             gp.residual_histogram(residual[self.mask])
 
-        if verbose and self.ndim==3:
+        if self.ndim==3:
             print("-"*110)
             print("ORIGINAL DATA")
             gp.cube_plot(self.data, wcs=self.wcs, freq=self.freq)
@@ -387,25 +447,7 @@ class HDMClouds():
             print("-"*110)
 
         # computing residual stats
-        total_flux = np.sum(self.data[self.mask])
-        flux_mask = residual<0.
-        flux_addition = -1. * np.sum(residual[flux_mask])
-        flux_lost = np.sum(residual[~flux_mask])
-
-        if self.mask is not None:
-            residual = residual[self.mask]
-        out = (estimate_rms(residual), np.max(np.abs(residual)), estimate_variance(residual), \
-               flux_addition/total_flux, flux_lost/total_flux)
-        
-        # printing output
-        if verbose:
-            print("RESIDUAL STATS")
-            print("RMS of residual: {0}".format(out[0]))
-            print("Inf norm of residual: {0}".format(out[1]))
-            print("Variance of residual: {0}".format(out[2]))
-            print("Normalized flux addition: {0}".format(out[3]))
-            print("Normalized flux lost: {0}".format(out[4]))
-        return out
+        self.get_residual_stats(verbose=True);
 
     
     def summarize(self, solver_output=True, residual_stats=True, solution_plot=True,
@@ -871,6 +913,14 @@ class HDICE():
         d = self.ndim
         w = w * (2*np.pi*sig**2)**(d/2.)
         return w
+    
+    def _get_approximation(self):
+        w,sig = self.get_params_mapped()
+        if self.ndim==2:
+            u = gm_eval2d_2(w, sig, self.xc, self.yc, self.xe, self.ye, self.nn_ind1, self.nn_ind1_aux)
+        if self.ndim==3:
+            u = gm_eval3d_2(w, sig, self.xc, self.yc, self.zc, self.xe, self.ye, self.ze, self.nn_ind1, self.nn_ind1_aux)
+        return u
 
     def get_approximation(self, params=None):
         if params is None:
