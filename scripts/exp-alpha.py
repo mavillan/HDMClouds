@@ -35,12 +35,13 @@ wcs = loaded_fits["wcs"]
 rms_list = []; inf_list = []; var_list = []; nfl_list = []; nfa_list = []
 _rms_list = []; _inf_list = []; _var_list = []; _nfl_list = []; _nfa_list = []
 time_list = []
-n_gaussians_list = np.arange(50, 401, 25)
-for n_gaussians in n_gaussians_list:
+alphas = np.arange(0., 5.1, 0.25)
+for alpha in alphas:
     hdmc = HDMClouds(data, 
                      back_level=0.089, 
                      wcs=wcs, verbose=False, 
-                     n_gaussians=n_gaussians, 
+                     n_gaussians=250,
+                     alpha=alpha,
                      eps=100., 
                      kappa=2, 
                      gmr_neighbors=64)
@@ -74,7 +75,7 @@ all_results = {"rms":rms_list,
                "_nfa":_nfa_list,
                "_nfl":_nfl_list,
                "time":time_list}   
-with open('exp-n_gaussians-orionKL.pickle', 'wb') as handle:
+with open('exp-alpha-orionKL.pickle', 'wb') as handle:
     pickle.dump(all_results, handle, protocol=pickle.HIGHEST_PROTOCOL)
     handle.close()
 
@@ -92,13 +93,14 @@ wcs = loaded_fits["wcs"]
 rms_list = []; inf_list = []; var_list = []; nfl_list = []; nfa_list = []
 _rms_list = []; _inf_list = []; _var_list = []; _nfl_list = []; _nfa_list = []
 time_list = []
-n_gaussians_list = np.arange(50, 601, 25)
-for n_gaussians in n_gaussians_list:
+alphas = np.arange(0., 5.1, 0.25)
+for alpha in alphas:
     hdmc = HDMClouds(data, 
                      back_level=1.5, 
                      wcs=wcs, 
                      verbose=False, 
-                     n_gaussians=n_gaussians, 
+                     n_gaussians=400,
+                     alpha=alpha,
                      eps=100., 
                      kappa=2, 
                      gmr_neighbors=64)
@@ -133,7 +135,7 @@ all_results2 = {"rms":rms_list,
                "_nfl":_nfl_list,
                "time":time_list}
 
-with open('exp-n_gaussians-orionMono.pickle', 'wb') as handle:
+with open('exp-alpha-orionMono.pickle', 'wb') as handle:
     pickle.dump(all_results2, handle, protocol=pickle.HIGHEST_PROTOCOL)
     handle.close()
 
@@ -153,14 +155,15 @@ base_level = estimate_rms(data)
 rms_list = []; inf_list = []; var_list = []; nfl_list = []; nfa_list = []
 _rms_list = []; _inf_list = []; _var_list = []; _nfl_list = []; _nfa_list = []
 time_list = []
-n_gaussians_list = np.arange(500, 1001, 25)
-for n_gaussians in n_gaussians_list:
+alphas = np.arange(0., 5.1, 0.25)
+for alpha in alphas:
     hdmc = HDMClouds(data, 
                      back_level=base_level, 
                      freq=spec, 
                      wcs=wcs, 
                      verbose=False, 
-                     n_gaussians=n_gaussians, 
+                     n_gaussians=800,
+                     alpha=alpha,
                      eps=100., 
                      kappa=2, 
                      gmr_neighbors=64)
@@ -195,7 +198,7 @@ all_results3 = {"rms":rms_list,
                "_nfl":_nfl_list,
                "time":time_list}
 
-with open('exp-n_gaussians-orionKLCube.pickle', 'wb') as handle:
+with open('exp-alpha-orionKLCube.pickle', 'wb') as handle:
     pickle.dump(all_results3, handle, protocol=pickle.HIGHEST_PROTOCOL)
     handle.close()
 
