@@ -1,4 +1,4 @@
-import pickless
+import pickle
 import os
 import sys
 import copy
@@ -35,18 +35,39 @@ wcs = loaded_fits["wcs"]
 all_results = dict()
 kappa_values = np.arange(0.1, 5.1, 0.1)
 for n_gaussians in range(200, 401, 50):
-    res_rms_list = []
-    res_inf_list = []
+    res_rms_list = []; res_inf_list = []; res_var_list = []; res_nfa_list = []; res_fl_list = []
+    _res_rms_list = []; _res_inf_list = []; _res_var_list = []; _res_nfa_list = []; _res_fl_list = []
     time_list = []
     for kappa in kappa_values:
-        hdmc = HDMClouds(data, back_level=0.089, wcs=wcs, verbose=False, n_gaussians=n_gaussians, eps=100., kappa=kappa, gmr_neighbors=64)
-        hdmc.build_gmr()
-        res_rms,res_inf,_,_,_ = hdmc.get_residual_stats(verbose=False)
+        hdmc = HDMClouds(data, 
+                         back_level=0.089, 
+                         wcs=wcs, 
+                         verbose=False, 
+                         n_gaussians=n_gaussians, 
+                         eps=100., 
+                         kappa=kappa, 
+                         gmr_neighbors=64)
+        hdmc.build_gmr(max_nfev=5000)
+        # computing residual stats
+        _res_rms,_res_inf,_res_var,_res_nfa,_res_fl = hdmc._get_residual_stats()
+        res_rms,res_inf,res_var,res_nfa,res_fl = hdmc.get_residual_stats()
+        # residuals computed in evaluation points
+        _res_rms_list.append(_res_rms)
+        _res_inf_list.append(_res_inf)
+        _res_var_list.append(_res_var)
+        _res_nfa_list.append(_res_nfa)
+        _res_fl_list.append(_res_fl)
+        # residuals computed in grid points
         res_rms_list.append(res_rms)
         res_inf_list.append(res_inf)
+        res_var_list.append(res_var)
+        res_nfa_list.append(res_nfa)
+        res_fl_list.append(res_fl)
+        # elapsed time
         time_list.append(hdmc.elapsed_time)
         del hdmc
-    all_results[str(n_gaussians)+"_gs"] = (res_rms_list, res_inf_list, time_list)
+    all_results[str(n_gaussians)+"_gs"] = [(res_rms_list, res_inf_list, res_inf_list, res_nfa_list, res_fl_list, time_list),
+                                           (_res_rms_list, _res_inf_list, _res_inf_list, _res_nfa_list, _res_fl_list, time_list)]
 
 with open('exp-kappa-orionKL.pickle', 'wb') as handle:
     pickle.dump(all_results, handle, protocol=pickle.HIGHEST_PROTOCOL)
@@ -64,19 +85,40 @@ wcs = loaded_fits["wcs"]
 
 all_results2 = dict()
 kappa_values = np.arange(0.1, 5.1, 0.1)
-for n_gaussians in range(200, 401, 50):
-    res_rms_list = []
-    res_inf_list = []
+for n_gaussians in range(200, 601, 50):
+    res_rms_list = []; res_inf_list = []; res_var_list = []; res_nfa_list = []; res_fl_list = []
+    _res_rms_list = []; _res_inf_list = []; _res_var_list = []; _res_nfa_list = []; _res_fl_list = []
     time_list = []
     for kappa in kappa_values:
-        hdmc = HDMClouds(data, back_level=1.5, wcs=wcs, verbose=False, n_gaussians=n_gaussians, eps=100., kappa=kappa, gmr_neighbors=64)
-        hdmc.build_gmr()
-        res_rms,res_inf,_,_,_ = hdmc.get_residual_stats(verbose=False)
+        hdmc = HDMClouds(data, 
+                         back_level=1.5, 
+                         wcs=wcs, 
+                         verbose=False, 
+                         n_gaussians=n_gaussians, 
+                         eps=100., 
+                         kappa=kappa, 
+                         gmr_neighbors=64)
+        hdmc.build_gmr(max_nfev=6000)
+        # computing residual stats
+        _res_rms,_res_inf,_res_var,_res_nfa,_res_fl = hdmc._get_residual_stats()
+        res_rms,res_inf,res_var,res_nfa,res_fl = hdmc.get_residual_stats()
+        # residuals computed in evaluation points
+        _res_rms_list.append(_res_rms)
+        _res_inf_list.append(_res_inf)
+        _res_var_list.append(_res_var)
+        _res_nfa_list.append(_res_nfa)
+        _res_fl_list.append(_res_fl)
+        # residuals computed in grid points
         res_rms_list.append(res_rms)
         res_inf_list.append(res_inf)
+        res_var_list.append(res_var)
+        res_nfa_list.append(res_nfa)
+        res_fl_list.append(res_fl)
+        # elapsed time
         time_list.append(hdmc.elapsed_time)
         del hdmc
-    all_results2[str(n_gaussians)+"_gs"] = (res_rms_list, res_inf_list, time_list)
+    all_results2[str(n_gaussians)+"_gs"] = [(res_rms_list, res_inf_list, res_inf_list, res_nfa_list, res_fl_list, time_list),
+                                           (_res_rms_list, _res_inf_list, _res_inf_list, _res_nfa_list, _res_fl_list, time_list)]
 
 with open('exp-kappa-orionMono.pickle', 'wb') as handle:
     pickle.dump(all_results2, handle, protocol=pickle.HIGHEST_PROTOCOL)
@@ -96,19 +138,40 @@ base_level = estimate_rms(data)
 
 all_results3 = dict()
 kappa_values = np.arange(0.5, 5.1, 0.5)
-for n_gaussians in range(500, 1001, 100):
-    res_rms_list = []
-    res_inf_list = []
+for n_gaussians in range(500, 1001, 50):
+    res_rms_list = []; res_inf_list = []; res_var_list = []; res_nfa_list = []; res_fl_list = []
+    _res_rms_list = []; _res_inf_list = []; _res_var_list = []; _res_nfa_list = []; _res_fl_list = []
     time_list = []
     for kappa in kappa_values:
-        hdmc = HDMClouds(data, back_level=base_level, freq=spec, wcs=wcs, verbose=False, n_gaussians=n_gaussians, eps=100., kappa=kappa, gmr_neighbors=64)
-        hdmc.build_gmr()
-        res_rms,res_inf,_,_,_ = hdmc.get_residual_stats(verbose=False)
+        hdmc = HDMClouds(data, 
+                         back_level=base_level, 
+                         wcs=wcs, 
+                         verbose=False, 
+                         n_gaussians=n_gaussians, 
+                         eps=100., 
+                         kappa=kappa, 
+                         gmr_neighbors=64)
+        hdmc.build_gmr(max_nfev=20000)
+        # computing residual stats
+        _res_rms,_res_inf,_res_var,_res_nfa,_res_fl = hdmc._get_residual_stats()
+        res_rms,res_inf,res_var,res_nfa,res_fl = hdmc.get_residual_stats()
+        # residuals computed in evaluation points
+        _res_rms_list.append(_res_rms)
+        _res_inf_list.append(_res_inf)
+        _res_var_list.append(_res_var)
+        _res_nfa_list.append(_res_nfa)
+        _res_fl_list.append(_res_fl)
+        # residuals computed in grid points
         res_rms_list.append(res_rms)
         res_inf_list.append(res_inf)
+        res_var_list.append(res_var)
+        res_nfa_list.append(res_nfa)
+        res_fl_list.append(res_fl)
+        # elapsed time
         time_list.append(hdmc.elapsed_time)
         del hdmc
-    all_results3[str(n_gaussians)+"_gs"] = (res_rms_list, res_inf_list, time_list)
+    all_results3[str(n_gaussians)+"_gs"] = [(res_rms_list, res_inf_list, res_inf_list, res_nfa_list, res_fl_list, time_list),
+                                           (_res_rms_list, _res_inf_list, _res_inf_list, _res_nfa_list, _res_fl_list, time_list)]
 
 with open('exp-kappa-orionKLCube.pickle', 'wb') as handle:
     pickle.dump(all_results3, handle, protocol=pickle.HIGHEST_PROTOCOL)
