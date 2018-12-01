@@ -43,7 +43,7 @@ if not os.path.isfile('exp-LM-orionKL.pickle'):
                         verbose=False, 
                         n_gaussians=250, 
                         eps=100, 
-                        kappa=1, 
+                        kappa=1.5, 
                         gmr_neighbors=64)
     for max_nfev in range(100, 10001, 100):
         print("MAX_NFEV:",max_nfev)
@@ -87,7 +87,7 @@ if not os.path.isfile('exp-LM-orionMono.pickle'):
                         verbose=False, 
                         n_gaussians=400, 
                         eps=100, 
-                        kappa=1, 
+                        kappa=1.5, 
                         gmr_neighbors=64)
     for max_nfev in range(100, 10001, 100):
         print("MAX_NFEV:",max_nfev)
@@ -134,9 +134,9 @@ if not os.path.isfile('exp-LM-orionKLCube.pickle'):
                         verbose=False, 
                         n_gaussians=800, 
                         eps=100, 
-                        kappa=1, 
+                        kappa=1.5, 
                         gmr_neighbors=64)
-    for max_nfev in range(1000, 100001, 1000):
+    for max_nfev in range(1000, 50001, 2000):
         print("MAX_NFEV:",max_nfev)
         hdmc = copy.deepcopy(hdmc_ig)
         hdmc.build_gmr(max_nfev=max_nfev)

@@ -45,18 +45,18 @@ for alpha in alphas:
                      eps=100., 
                      kappa=2, 
                      gmr_neighbors=64)
-    hdmc.build_gmr(max_nfev=5000)
+    hdmc.build_gmr(max_nfev=8000)
     time_list.append(hdmc.elapsed_time)
     
     # computing residuals on evaluation points
-    _rmsR, _infR, _varR, _nfa, _nfl = hdmc._get_residual_stats()
+    _rmsR, _infR, _varR, _nfa, _nfl = hdmc._get_residual_stats(tuncate=False)
     _rms_list.append(_rmsR)
     _inf_list.append(_infR)
     _var_list.append(_varR)
     _nfa_list.append(_nfa)
     _nfl_list.append(_nfl)
     # computing residual on grid points
-    rmsR, infR, varR, nfa, nfl = hdmc.get_residual_stats()
+    rmsR, infR, varR, nfa, nfl = hdmc.get_residual_stats(truncate=True)
     rms_list.append(rmsR)
     inf_list.append(infR)
     var_list.append(varR)
@@ -104,18 +104,18 @@ for alpha in alphas:
                      eps=100., 
                      kappa=2, 
                      gmr_neighbors=64)
-    hdmc.build_gmr(max_nfev=6000)
+    hdmc.build_gmr(max_nfev=10000)
     time_list.append(hdmc.elapsed_time)
     
     # computing residuals on evaluation points
-    _rmsR, _infR, _varR, _nfa, _nfl = hdmc._get_residual_stats()
+    _rmsR, _infR, _varR, _nfa, _nfl = hdmc._get_residual_stats(truncate=False)
     _rms_list.append(_rmsR)
     _inf_list.append(_infR)
     _var_list.append(_varR)
     _nfa_list.append(_nfa)
     _nfl_list.append(_nfl)
     # computing residual on grid points
-    rmsR, infR, varR, nfa, nfl = hdmc.get_residual_stats()
+    rmsR, infR, varR, nfa, nfl = hdmc.get_residual_stats(truncate=True)
     rms_list.append(rmsR)
     inf_list.append(infR)
     var_list.append(varR)
@@ -167,18 +167,18 @@ for alpha in alphas:
                      eps=100., 
                      kappa=2, 
                      gmr_neighbors=64)
-    hdmc.build_gmr(max_nfev=20000)
+    hdmc.build_gmr(max_nfev=50000)
     time_list.append(hdmc.elapsed_time)
     
     # computing residuals on evaluation points
-    _rmsR, _infR, _varR, _nfa, _nfl = hdmc._get_residual_stats()
+    _rmsR, _infR, _varR, _nfa, _nfl = hdmc.get_residual_stats(truncate=False)
     _rms_list.append(_rmsR)
     _inf_list.append(_infR)
     _var_list.append(_varR)
     _nfa_list.append(_nfa)
     _nfl_list.append(_nfl)
     # computing residual on grid points
-    rmsR, infR, varR, nfa, nfl = hdmc.get_residual_stats()
+    rmsR, infR, varR, nfa, nfl = hdmc.get_residual_stats(truncate=True)
     rms_list.append(rmsR)
     inf_list.append(infR)
     var_list.append(varR)
