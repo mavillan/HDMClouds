@@ -383,12 +383,18 @@ class HDMClouds():
         w = w * (2*np.pi*sig**2)**(d/2.)
         return w
 
-    def get_approximation(self):
+    def get_approximation(self, truncate=True):
         w,sig = self.get_params()
-        if self.ndim==2:
-            u = gm_eval2d_2(w, sig, self.xc, self.yc, self.xgrid, self.ygrid, self.nn_ind, self.nn_ind_aux)
-        if self.ndim==3:
-            u = gm_eval3d_2(w, sig, self.xc, self.yc, self.zc, self.xgrid, self.ygrid, self.zgrid, self.nn_ind, self.nn_ind_aux)
+        if truncate:
+            if self.ndim==2:
+                u = gm_eval2d_2(w, sig, self.xc, self.yc, self.xgrid, self.ygrid, self.nn_ind, self.nn_ind_aux)
+            if self.ndim==3:
+                u = gm_eval3d_2(w, sig, self.xc, self.yc, self.zc, self.xgrid, self.ygrid, self.zgrid, self.nn_ind, self.nn_ind_aux)
+        else:
+            if self.ndim==2:
+                u = gm_eval2d_1(w, sig, self.xc, self.yc, self.xgrid, self.ygrid)
+            if self.ndim==3:
+                u = gm_eval3d_1(w, sig, self.xc, self.yc, self.zc, self.xgrid, self.ygrid, self.zgrid)            
         u = u.reshape(self.shape)
         return u
     
@@ -412,16 +418,15 @@ class HDMClouds():
                flux_addition/total_flux, flux_lost/total_flux) 
         return out
 
-    def get_residual_stats(self, verbose=False):
+    def get_residual_stats(self, truncate=True, verbose=False):
         """
         Residual stats computed in the significant emission pixels
         """
-
         # residuals are computed individually in each ICE
         all_residuals = list()
         total_flux = 0
         for hdice in self.hdice_list:
-            u = hdice.get_approximation()
+            u = hdice.get_approximation(truncate=truncate)
             _residual = hdice.fgrid-u
             total_flux += np.sum(hdice.fgrid)
             all_residuals.append(_residual)
@@ -962,7 +967,7 @@ class HDICE():
             u = gm_eval3d_2(w, sig, self.xc, self.yc, self.zc, self.xe, self.ye, self.ze, self.nn_ind1, self.nn_ind1_aux)
         return u
 
-    def get_approximation(self, params=None):
+    def get_approximation(self, truncate=True, params=None):
         if params is None:
             w,sig = self.get_params_mapped()
             xc = self.xc; yc = self.yc
@@ -970,11 +975,17 @@ class HDICE():
         else:
             if self.ndim==2: xc,yc,w,sig = params
             if self.ndim==3: xc,yc,zc,w,sig = params
-
-        if self.ndim==2:
-            u = gm_eval2d_2(w, sig, xc, yc, self.xgrid, self.ygrid, self.nn_ind3, self.nn_ind3_aux)
-        if self.ndim==3:
-            u = gm_eval3d_2(w, sig, xc, yc, zc, self.xgrid, self.ygrid, self.zgrid, self.nn_ind3, self.nn_ind3_aux)
+        
+        if truncate:
+            if self.ndim==2:
+                u = gm_eval2d_2(w, sig, xc, yc, self.xgrid, self.ygrid, self.nn_ind3, self.nn_ind3_aux)
+            if self.ndim==3:
+                u = gm_eval3d_2(w, sig, xc, yc, zc, self.xgrid, self.ygrid, self.zgrid, self.nn_ind3, self.nn_ind3_aux)
+        else:
+            if self.ndim==2:
+                u = gm_eval2d_1(w, sig, xc, yc, self.xgrid, self.ygrid)
+            if self.ndim==3:
+                u = gm_eval3d_1(w, sig, xc, yc, zc, self.xgrid, self.ygrid, self.zgrid)            
         return u
 
     def get_approximation_global(self, params=None):
