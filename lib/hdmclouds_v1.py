@@ -543,7 +543,7 @@ class HDMClouds():
             self.xc = mu_global[:,0]; self.yc = mu_global[:,1] 
             if self.ndim==3: self.zc = mu_global[:,2]
             # computing neighborhood indexes to perform fast GM evaluation
-            nn_indexes,nn_indexes_aux = compute_neighbors(mu_global, 
+            nn_indexes,nn_indexes_aux,_ = compute_neighbors(mu_global, 
                                                           self.grid_points, 
                                                           self.kappa*self.maxsig)
             self.nn_ind = nn_indexes
