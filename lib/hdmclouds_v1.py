@@ -194,8 +194,28 @@ class HDMClouds():
         if bound_points is not None:
             bp_labels = clf.predict(bound_points)
         else: bp_labels = None
+        
+        ###################################################
+        # computation of GMR for initial guess generation
+        ###################################################
+        _w_init = w_init * (2*np.pi*sig_init**2)**(self.ndim/2.)
+        w_red, mu_red, cov_red = reduce_mixture(_w_init, mu_init, sig_init, 2*n_gaussians, 
+                                                n_neighbors=gmr_neighbors, verbose=False)
+        eval_points = mu_red
+        eval_points_labels = clf.predict(eval_points)
+        # second run...
+        w, mu, cov = reduce_mixture(w_red, mu_red, cov_red, n_gaussians, 
+                                    n_neighbors=gmr_neighbors, verbose=False)
+        center_points = mu
+        center_points_labels = clf.predict(center_points)  
+        # covariance truncation
+        sig = np.asarray( [np.mean((np.linalg.eig(_cov)[0]))**(1./2) for _cov in cov] )
+        # normal -> Gaussian's weigths
+        w = w / (2*np.pi*sig**2)**(self.ndim/2.)
 
+        ######################################################
         # instantiating HDICE for each Isolated Cloud Entity
+        ######################################################    
         hdice_list = list()
         hdice_dict = dict()
         num_ice = db_labels.max()+1
@@ -207,17 +227,21 @@ class HDMClouds():
         
         for i in range(0, db_labels.max()+1):
             _mask = db_labels==i
+            _mask_ep = eval_points_labels==i   # binary mask for eval points
+            _mask_cp = center_points_labels==i # binary mask for gaussian centers
             if bp_labels is not None: _bmask = bp_labels==i
             print("Isolated Cloud Entity {0}: {1} pixels of significant emission.".format(hdice_keys[i], np.sum(_mask)))
 
             if self.ndim==2:
-                hdice = HDICE(w_init[_mask], mu_init[_mask], sig_init[_mask], 
+                hdice = HDICE(w_init[_mask], mu_init[_mask], sig_init[_mask],
+                              w[_mask_cp], mu[_mask_cp], sig[_mask_cp], mu_red[_mask_ep],
                               back_level, alpha, lamb, compression, kappa=kappa,
                               gmr_neighbors=gmr_neighbors,
                               xgrid_global=xgrid, ygrid_global=ygrid, 
                               bound_points=bound_points[_bmask])
             if self.ndim==3:
-                hdice = HDICE(w_init[_mask], mu_init[_mask], sig_init[_mask], 
+                hdice = HDICE(w_init[_mask], mu_init[_mask], sig_init[_mask],
+                              w[_mask_cp], mu[_mask_cp], sig[_mask_cp], mu_red[_mask_ep],
                               back_level, alpha, lamb, compression, kappa=kappa,
                               gmr_neighbors=gmr_neighbors,
                               xgrid_global=xgrid, ygrid_global=ygrid, zgrid_global=zgrid, 
@@ -694,10 +718,14 @@ class HDICE():
     """
     Hierarchical Decomposition of Independent/Isolated Cloud Entities
     """
-    def __init__(self, w_init, mu_init, sig_init, back_level, alpha, lamb, compression, 
-                 minsig=None, maxsig=None, kappa=5., gmr_neighbors=None, verbose=False, 
-                 xgrid_global=None, ygrid_global=None, zgrid_global=None, bound_points=None, 
-                 min_num_gaussians=10):
+    def __init__(self, 
+                 w_init, mu_init, sig_init, 
+                 w, mu, sig, eval_points,
+                 back_level, alpha, lamb, compression, 
+                 minsig=None, maxsig=None, kappa=5., 
+                 gmr_neighbors=None, verbose=False, 
+                 xgrid_global=None, ygrid_global=None, zgrid_global=None, 
+                 bound_points=None, min_num_gaussians=10):
 
         self.ndim = mu_init.shape[1]
         # Max intensity in the CE
@@ -723,31 +751,42 @@ class HDICE():
 
         # target number of gaussians
         n_gaussians = max(int(len(w_init)*compression), min_num_gaussians)
-
-        # to Normal transformation
-        w_init = w_init * (2*np.pi*sig_init**2)**(self.ndim/2.)
-        w_red, mu_red, cov_red = reduce_mixture(w_init, mu_init, sig_init, 2*n_gaussians, 
-                                                n_neighbors=gmr_neighbors, verbose=False)
-        xe = mu_red[:,0]
-        ye = mu_red[:,1]
-        if self.ndim==3: ze = mu_red[:,2]
-        eval_points = mu_red
-
-        w, mu, cov = reduce_mixture(w_red, mu_red, cov_red, n_gaussians, 
-                                    n_neighbors=gmr_neighbors, verbose=False)
-        xc = mu[:,0]
-        yc = mu[:,1]
-        if self.ndim==3: zc = mu[:,2]
-        center_points = mu
-
-        # truncation of the covariance matrices
-        sig = np.asarray( [np.mean((np.linalg.eig(_cov)[0]))**(1./2) for _cov in cov] )
+        
+        if len(w)<n_gaussians:
+            del w,mu,sig,eval_points
+            # make the GMR again!
+            w_red, mu_red, cov_red = reduce_mixture(w_init, mu_init, sig_init, 2*n_gaussians, 
+                                                    n_neighbors=gmr_neighbors, verbose=False)
+            xe = mu_red[:,0]
+            ye = mu_red[:,1]
+            if self.ndim==3: ze = mu_red[:,2]
+            eval_points = mu_red
+            # second reduction
+            w, mu, cov = reduce_mixture(w_red, mu_red, cov_red, n_gaussians, 
+                                        n_neighbors=gmr_neighbors, verbose=False)
+            xc = mu[:,0]
+            yc = mu[:,1]
+            if self.ndim==3: zc = mu[:,2]
+            center_points = mu
+            
+            # truncation of the covariance matrices
+            sig = np.asarray( [np.mean((np.linalg.eig(_cov)[0]))**(1./2) for _cov in cov] )
+            # normal -> Gaussian's weigths
+            w = w / (2*np.pi*sig**2)**(self.ndim/2.)
+        else:
+            # use the parameters passed as argument
+            xc = mu[:,0]
+            yc = mu[:,1]
+            if self.ndim==3: zc = mu[:,2]
+            center_points = mu
+            
+            xe = eval_points[:,0]
+            ye = eval_points[:,1]
+            if self.ndim==3: ze = eval_points[:,2]
+            
         minsig = np.min(np.abs(sig))/3.
         maxsig = 3*np.max(np.abs(sig))
         epsilon = 1e-6 # little shift to avoid NaNs in inv_sig_mapping
-        
-        # Normal to Gaussian
-        w = w / (2*np.pi*sig**2)**(self.ndim/2.)
 
         #######################################
         # Computing neighborhoods
