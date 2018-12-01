@@ -264,6 +264,7 @@ class HDMClouds():
         # retrieving the parameters for the global GM
         w_global = list(); mu_global = list(); sig_global = list()
         eval_points_global = list()
+        num_neigh = list()
 
         for hdice in hdice_list:
             w,sig = hdice.get_params_mapped()
@@ -273,21 +274,23 @@ class HDMClouds():
             mu_global.append(mu)
             sig_global.append(sig)
             eval_points_global.append(eval_points)
+            num_neigh.append(hdice.num_neigh)
 
         w_global = np.hstack(w_global)
         mu_global = np.vstack(mu_global)
         sig_global = np.hstack(sig_global)
         eval_points_global = np.vstack(eval_points_global)
+        num_neigh = np.hstack(num_neigh)
 
         # computing neighborhood indexes to perform fast GM evaluation
         minsig = np.min(np.abs(sig_global))/3.
         maxsig = 3*np.max(np.abs(sig_global))
         
-        nn_indexes,nn_indexes_aux = compute_neighbors(mu_global, grid_points, kappa*maxsig)
+        nn_indexes,nn_indexes_aux,_ = compute_neighbors(mu_global, grid_points, kappa*maxsig)
         self.nn_ind = nn_indexes
         self.nn_ind_aux = nn_indexes_aux
         
-        nn_indexes1,nn_indexes_aux1 = compute_neighbors(mu_global, eval_points_global, kappa*maxsig)
+        nn_indexes1,nn_indexes_aux1,_ = compute_neighbors(mu_global, eval_points_global, kappa*maxsig)
         self.nn_ind1 = nn_indexes1
         self.nn_ind_aux1 = nn_indexes_aux1
 
@@ -326,6 +329,8 @@ class HDMClouds():
         self.alpha = alpha
         self.lamb = lamb
         self.eval_points = eval_points_global
+        self.mean_num_neigh = np.mean(num_neigh)
+        self.med_num_neigh = np.median(num_neigh)
         self.elapsed_time = None
         self.residual_stats = None
 
@@ -797,23 +802,23 @@ class HDICE():
         # Computing neighborhoods
         #######################################
 
-        nn_indexes,nn_indexes_aux = compute_neighbors(center_points, eval_points, kappa*maxsig)
+        nn_indexes,nn_indexes_aux,num_neigh = compute_neighbors(center_points, eval_points, kappa*maxsig)
         self.nn_ind1 = nn_indexes
         self.nn_ind1_aux = nn_indexes_aux
 
         if bound_points is not None:
-            nn_indexes,nn_indexes_aux = compute_neighbors(center_points, bound_points, kappa*maxsig)
+            nn_indexes,nn_indexes_aux,_ = compute_neighbors(center_points, bound_points, kappa*maxsig)
             self.nn_ind2 = nn_indexes
             self.nn_ind2_aux = nn_indexes_aux
         else:
             self.nn_ind2 = None
             self.nn_ind2_aux = None
 
-        nn_indexes,nn_indexes_aux = compute_neighbors(center_points, grid_points, kappa*maxsig)
+        nn_indexes,nn_indexes_aux,_ = compute_neighbors(center_points, grid_points, kappa*maxsig)
         self.nn_ind3 = nn_indexes
         self.nn_ind3_aux = nn_indexes_aux
 
-        nn_indexes,nn_indexes_aux = compute_neighbors(center_points, grid_points_global, kappa*maxsig)
+        nn_indexes,nn_indexes_aux,_ = compute_neighbors(center_points, grid_points_global, kappa*maxsig)
         self.nn_ind4 = nn_indexes
         self.nn_ind4_aux = nn_indexes_aux
 
@@ -877,6 +882,7 @@ class HDICE():
         self.lamb = lamb
         self.back_level = back_level
         self.gmr_neighbors = gmr_neighbors
+        self.num_neigh = num_neigh
         self.scipy_sol = None
         self.scipy_tol = None
         self.elapsed_time = None
@@ -1045,14 +1051,14 @@ class HDICE():
         self.center_points = center_points
         
         # as components are being prunned, we need to re-compute nn_indexes
-        nn_indexes,nn_indexes_aux = compute_neighbors(center_points, 
+        nn_indexes,nn_indexes_aux,_ = compute_neighbors(center_points, 
                                                       self.eval_points, 
                                                       self.kappa*self.maxsig)
         self.nn_ind1 = nn_indexes
         self.nn_ind1_aux = nn_indexes_aux
 
         if self.bound_points is not None:
-            nn_indexes,nn_indexes_aux = compute_neighbors(center_points, 
+            nn_indexes,nn_indexes_aux,_ = compute_neighbors(center_points, 
                                                           self.bound_points, 
                                                           self.kappa*self.maxsig)
             self.nn_ind2 = nn_indexes
@@ -1061,14 +1067,14 @@ class HDICE():
             self.nn_ind2 = None
             self.nn_ind2_aux = None
 
-        nn_indexes,nn_indexes_aux = compute_neighbors(center_points, 
+        nn_indexes,nn_indexes_aux,_ = compute_neighbors(center_points, 
                                                       self.grid_points, 
                                                       self.kappa*
                                                       self.maxsig)
         self.nn_ind3 = nn_indexes
         self.nn_ind3_aux = nn_indexes_aux
 
-        nn_indexes,nn_indexes_aux = compute_neighbors(center_points, 
+        nn_indexes,nn_indexes_aux,_ = compute_neighbors(center_points, 
                                                       self.grid_points_global, 
                                                       self.kappa*
                                                       self.maxsig)
