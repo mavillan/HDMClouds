@@ -125,7 +125,6 @@ class HDMClouds():
         #######################################
         Nb = 0
         boundary_points = boundary_points_generation(data, mask, Nb)
-        #gp.points_plot(data, points=boundary_points, color="green", wcs=wcs)
         # right format
         xb = boundary_points[:,0]
         yb = boundary_points[:,1]
@@ -194,10 +193,6 @@ class HDMClouds():
         self.nind1 = neigh_indexes
         self.nind_aux1 = neigh_indexes_aux
 
-        #neigh_indexes,neigh_indexes_aux = compute_neighbors(mu_red, points_bound, 5*np.max(sig_red))
-        #self.nind2 = neigh_indexes
-        #self.nind_aux2 = neigh_indexes_aux
-
         neigh_indexes,neigh_indexes_aux = compute_neighbors(mu_red, points_grid, 5*maxsig)
         self.nind3 = neigh_indexes
         self.nind_aux3 = neigh_indexes_aux
@@ -258,8 +253,6 @@ class HDMClouds():
         Get the real parameters of the model (mapped/bounded):
         xc, yc, c, sig
         """
-        #xc = self.xc0 + self.deltax * np.sin(self.theta_xc)
-        #yc = self.yc0 + self.deltay * np.sin(self.theta_yc)
         w = self.w**2
         sig = sig_mapping(self.sig, self.minsig, self.maxsig)
         theta = theta_mapping(self.theta) 
@@ -399,11 +392,6 @@ class HDMClouds():
         """
         t0 = time.time()
 
-        # lm optimization from scipy.optimize.root
-        #if max_nfev is None:
-        #    max_nfev = 100*(len(self.get_params())+1)
-        #options = {'maxiter':max_nfev, 'xtol':xtol, 'ftol':ftol}
-        #sol = sp.optimize.root(self.F, self.get_params(), method='lm', options=options)
         while True:
             options = {'xtol':tol, 'ftol':tol}
             sol = sp.optimize.root(self.F, self.get_params(), method='lm', options=options)
@@ -420,16 +408,10 @@ class HDMClouds():
         self.set_w(opt_w)
         self.set_sig(opt_sig)
         self.set_theta(opt_theta)
-
-        # prune of gaussians from mixture
-        #self.prune()
     
         # storing results    
         self.scipy_sol = sol
         self.elapsed_time = time.time() - t0
-        #self.summarize()
-
 
     def build_htree(self):
         pass
-

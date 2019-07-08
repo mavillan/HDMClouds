@@ -107,7 +107,6 @@ class HDMClouds():
         self.zgrid = zgrid
         grid_points = np.vstack([xgrid,ygrid,zgrid]).T
 
-
         #######################################
         # Computing boundary points
         #######################################
@@ -157,12 +156,6 @@ class HDMClouds():
         elif ig_method=="eigenvalue":
             sig_red = np.asarray( [np.mean((np.linalg.eig(cov)[0]))**(1./2) for cov in cov_red] )
 
-        #if verbose:
-            # visualizing the choosen points
-            #gp.points_plot3d(center_points, color="red")
-            #gp.points_plot3d(eval_points, color="blue")
-
-
         #################################################
         # Computing neighbor indexes for fast evaluation
         #################################################
@@ -173,21 +166,15 @@ class HDMClouds():
         self.nind1 = neigh_indexes
         self.nind_aux1 = neigh_indexes_aux
 
-        #neigh_indexes,neigh_indexes_aux = compute_neighbors(mu_red, points_bound, 5*np.max(sig_red))
-        #self.nind2 = neigh_indexes
-        #self.nind_aux2 = neigh_indexes_aux
-
         neigh_indexes,neigh_indexes_aux = compute_neighbors(center_points, grid_points, kappa*maxsig)
         self.nind3 = neigh_indexes
         self.nind_aux3 = neigh_indexes_aux
-
 
         #############################################################
         # Normalizing the weights "w" from the IG Gaussian Mixture
         #############################################################
         u = gm_eval3d_2(w_red, sig_red, xc, yc, zc, xgrid, ygrid, zgrid, self.nind3, self.nind_aux3)
         w_red *= data.max()/u.max()
-
 
         ########################################
         # HDMClouds internals
@@ -244,8 +231,6 @@ class HDMClouds():
         Get the real parameters of the model (mapped/bounded):
         xc, yc, c, sig
         """
-        #xc = self.xc0 + self.deltax * np.sin(self.theta_xc)
-        #yc = self.yc0 + self.deltay * np.sin(self.theta_yc)
         w = self.w**2
         sig = sig_mapping(self.sig, self.minsig, self.maxsig)
         sigf = sig_mapping(self.sigf, self.minsig, self.maxsig)
@@ -397,11 +382,6 @@ class HDMClouds():
         """
         t0 = time.time()
 
-        # lm optimization from scipy.optimize.root
-        #if max_nfev is None:
-        #    max_nfev = 100*(len(self.get_params())+1)
-        #options = {'maxiter':max_nfev, 'xtol':xtol, 'ftol':ftol}
-        #sol = sp.optimize.root(self.F, self.get_params(), method='lm', options=options)
         while True:
             options = {'xtol':tol, 'ftol':tol}
             sol = sp.optimize.root(self.F, self.get_params(), method='lm', options=options)
@@ -417,16 +397,11 @@ class HDMClouds():
         # update to best parameters
         self.set_w(opt_w)
         self.set_sig(opt_sig, opt_sigf)
-
-        # prune of gaussians from mixture
-        #self.prune()
     
         # storing results    
         self.scipy_sol = sol
         self.elapsed_time = time.time() - t0
         #self.summarize()
 
-
     def build_htree(self):
         pass
-
