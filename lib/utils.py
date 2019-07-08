@@ -24,23 +24,6 @@ warnings.filterwarnings("ignore", message="Cube is a Stokes cube, returning spec
 ii32 = np.iinfo(np.int32)
 INAN = ii32.max
 
-def mk(errors_list):
-    _errors = np.asarray(errors_list)
-    unique_elements,counts_elements = np.unique(_errors, return_counts=True)
-    unique_elements = unique_elements[::-1]
-    
-    np.random.seed(19)
-    _errors = list()
-    for i in range(len(unique_elements)-1):
-        y2 = unique_elements[i]
-        y1 = unique_elements[i+1]
-        delta = (y2-y1)/counts_elements[i]
-        _errors.append(y2)
-        values = np.sort( (y2-y1)*np.random.random(counts_elements[i]-1)+y1 )[::-1]
-        _errors += values.tolist()
-    _errors += [unique_elements[-1]]*counts_elements[-1]
-    return _error
-
 
 def estimate_rms(data):
     """
@@ -220,8 +203,3 @@ def compute_neighbors2(mu_center, mu_eval, maxsig):
             neigh_indexes[i,j] = index
             
     return nn,neigh_indexes
-
-
-            
-
-
